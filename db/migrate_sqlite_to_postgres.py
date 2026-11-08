@@ -163,6 +163,19 @@ def parse_ts(value, field, number, errors):
         return None
 
 
+def clean_pg_text(v):
+    """Strip NUL bytes from a value for Postgres.
+
+    Postgres `text` columns reject NUL (0x00) outright — one NUL anywhere
+    in a row aborts the whole insert. PyMuPDF's PDF text extraction
+    leaves literal NULs in form-field separators (e.g. 236/2025/NĐ-CP,
+    151/2014/TT-BTC), so every string bound for Postgres passes through
+    here. Removing NULs changes no visible content: they are invisible
+    separators, never part of the legal text.
+    """
+    return v.replace("\x00", "") if isinstance(v, str) else v
+
+
 def load_sqlite(sqlite_path):
     """Read all three SQLite tables read-only; return (docs, provisions, logs, errors).
 
@@ -208,13 +221,13 @@ def load_sqlite(sqlite_path):
                 f"(URL: {source_url}) — cannot map to a source value"
             )
             continue
-        text = r["extracted_text"] or ""
+        text = clean_pg_text(r["extracted_text"] or "")
         docs.append({
-            "number": number,
-            "title": title,
-            "category": (r["category"] or "").strip(),
+            "number": clean_pg_text(number),
+            "title": clean_pg_text(title),
+            "category": clean_pg_text((r["category"] or "").strip()),
             "source": source,
-            "source_url": source_url,
+            "source_url": clean_pg_text(source_url),
             "issued_date": parse_date(r["issued_date"], "issued_date", number, errors),
             "effective_date": parse_date(r["effective_date"], "effective_date", number, errors),
             "fetched_at": parse_ts(r["fetched_at"], "fetched_at", number, errors),
@@ -248,18 +261,18 @@ def load_sqlite(sqlite_path):
             errors.append(f"duplicate provision key (would violate UNIQUE): {key}")
         seen_prov_keys.add(key)
         provisions.append({
-            "document_number": r["document_number"],
-            "chuong": r["chuong"],
-            "muc": r["muc"],
-            "dieu": r["dieu"],
-            "khoan": r["khoan"],
-            "diem": r["diem"],
+            "document_number": clean_pg_text(r["document_number"]),
+            "chuong": clean_pg_text(r["chuong"]),
+            "muc": clean_pg_text(r["muc"]),
+            "dieu": clean_pg_text(r["dieu"]),
+            "khoan": clean_pg_text(r["khoan"]),
+            "diem": clean_pg_text(r["diem"]),
             "ordinal": r["ordinal"],
-            "text": text or "",
+            "text": clean_pg_text(text or ""),
             "confidence": r["confidence"],
         })
 
-    logs = [dict(r) for r in log_rows]
+    logs = [{k: clean_pg_text(v) for k, v in dict(r).items()} for r in log_rows]
     for r in logs:
         parse_ts(r["fetched_at"], "fetched_at", r["document_number"], errors)
     return docs, provisions, logs, errors
