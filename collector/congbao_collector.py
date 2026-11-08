@@ -552,7 +552,10 @@ def extract_pdf_text(pdf_bytes: bytes) -> tuple[str, int, int]:
         if not txt.strip():
             scanned += 1
         parts.append(txt)
-    return "\n".join(parts), pages, scanned
+    # PyMuPDF leaves literal NUL bytes in form-field separators; strip
+    # them here so the stored text is clean for Postgres (which rejects
+    # NUL in text columns) and for any downstream consumer.
+    return "\n".join(parts).replace("\x00", ""), pages, scanned
 
 
 def extract_vbpl_html_text(html: str) -> str:
@@ -590,7 +593,9 @@ def extract_vbpl_html_text(html: str) -> str:
     lines = [ln for ln in lines if ln]
     if lines and lines[0] == "Document Content":
         lines = lines[1:]
-    return "\n".join(lines)
+    # Strip NUL bytes (present in some VBPL-rendered content); Postgres
+    # rejects NUL in text columns.
+    return "\n".join(lines).replace("\x00", "")
 
 
 HEADER_RE = re.compile(r"^\s*\d+\s+CÔNG BÁO/Số\s+\d+\s*\+\s*\d+/Ngày\s+\d+-\d+-\d+\s*$", re.M)
