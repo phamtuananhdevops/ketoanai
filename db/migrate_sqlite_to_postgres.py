@@ -354,7 +354,19 @@ def count_all(cur):
 
 def run_live(docs, provisions, logs, database_url):
     psycopg = get_psycopg()
-    conn = psycopg.connect(database_url)
+    # TCP keepalives: the Supabase pooler (Supavisor, transaction mode)
+    # dropped the connection right after the big migration transaction
+    # committed in runs #9/#10 (psycopg.OperationalError "the connection
+    # is closed" at the AFTER-counts cursor). Keepalives keep middleboxes
+    # from timing the connection out during the long single transaction.
+    conn = psycopg.connect(
+        database_url,
+        connect_timeout=30,
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5,
+    )
     try:
         with conn.cursor() as cur:
             before = count_all(cur)
@@ -394,9 +406,13 @@ def run_live(docs, provisions, logs, database_url):
 
                 # 3. fetch_log — insert only rows not already present.
                 cur.execute(FETCH_LOG_SELECT_EXISTING_SQL)
+                # Compare fetched_at as datetimes, not isoformat strings:
+                # Postgres TIMESTAMPTZ and SQLite text can render the same
+                # instant differently ('+00:00' vs 'Z', microseconds), which
+                # made re-runs re-insert all 139 fetch_log rows as
+                # duplicates. Datetime equality is instant-based and immune.
                 existing = {
-                    (r[0], r[1], r[2],
-                     r[3].isoformat() if r[3] is not None else None, r[4])
+                    (r[0], r[1], r[2], r[3], r[4])
                     for r in cur.fetchall()
                 }
                 new_logs = []
@@ -404,7 +420,7 @@ def run_live(docs, provisions, logs, database_url):
                     fetched = r["fetched_at"]
                     key = (
                         r["document_number"], r["source_url"], r["pdf_url"],
-                        (datetime.fromisoformat(fetched).isoformat()
+                        (datetime.fromisoformat(fetched)
                          if fetched else None),
                         r["status"],
                     )
@@ -423,27 +439,55 @@ def run_live(docs, provisions, logs, database_url):
                 cur.execute(VERSION_INSERT_SQL)
                 print(f"document_versions: {cur.rowcount} new first-version rows")
 
-        with conn.cursor() as cur:
-            after = count_all(cur)
-        print(f"AFTER:  {after}")
-        print()
-        print("=== Verification (live Postgres) ===")
-        with conn.cursor() as cur:
-            cur.execute("SELECT status, COUNT(*) FROM documents GROUP BY status ORDER BY status")
-            print("documents by status:", cur.fetchall())
-            cur.execute("SELECT source, COUNT(*) FROM documents GROUP BY source ORDER BY source")
-            print("documents by source:", cur.fetchall())
-            cur.execute("SELECT COUNT(*) FROM provisions")
-            print("total provisions:", cur.fetchone()[0])
-            cur.execute("SELECT COUNT(*) FROM document_versions")
-            print("total document_versions:", cur.fetchone()[0])
-            cur.execute("SELECT COUNT(*) FROM fetch_log")
-            print("total fetch_log:", cur.fetchone()[0])
-            cur.execute(
-                "SELECT COUNT(*) FROM provisions p "
-                "LEFT JOIN documents d ON d.id = p.document_id WHERE d.id IS NULL"
+        # Post-commit verification. The migration transaction above has
+        # already committed by this point, so a dead connection here must
+        # NOT fail the run: reconnect once on a fresh connection and retry
+        # the counts. (Runs #9/#10 died exactly here — the pooler dropped
+        # the connection right after COMMIT — even though all data was
+        # already in Postgres.)
+        def _verify(connection):
+            with connection.cursor() as cur:
+                after = count_all(cur)
+            print(f"AFTER:  {after}")
+            print()
+            print("=== Verification (live Postgres) ===")
+            with connection.cursor() as cur:
+                cur.execute("SELECT status, COUNT(*) FROM documents GROUP BY status ORDER BY status")
+                print("documents by status:", cur.fetchall())
+                cur.execute("SELECT source, COUNT(*) FROM documents GROUP BY source ORDER BY source")
+                print("documents by source:", cur.fetchall())
+                cur.execute("SELECT COUNT(*) FROM provisions")
+                print("total provisions:", cur.fetchone()[0])
+                cur.execute("SELECT COUNT(*) FROM document_versions")
+                print("total document_versions:", cur.fetchone()[0])
+                cur.execute("SELECT COUNT(*) FROM fetch_log")
+                print("total fetch_log:", cur.fetchone()[0])
+                cur.execute(
+                    "SELECT COUNT(*) FROM provisions p "
+                    "LEFT JOIN documents d ON d.id = p.document_id WHERE d.id IS NULL"
+                )
+                print("orphan provisions (must be 0):", cur.fetchone()[0])
+            return after
+
+        try:
+            _verify(conn)
+        except psycopg.OperationalError as e:
+            print(f"WARNING: verification connection dropped after COMMIT "
+                  f"({e}) — data is committed; retrying counts on a fresh "
+                  f"connection...", file=sys.stderr)
+            try:
+                conn.close()
+            except Exception:
+                pass
+            conn = psycopg.connect(
+                database_url,
+                connect_timeout=30,
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5,
             )
-            print("orphan provisions (must be 0):", cur.fetchone()[0])
+            _verify(conn)
         print()
         print("Done. Re-run this script to confirm idempotency — "
               "AFTER counts must be identical on the second run.")
