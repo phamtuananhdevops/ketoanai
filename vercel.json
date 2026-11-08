@@ -1,1 +1,1 @@
-{"builds":[{"src":"api/index.py","use":"@vercel/python"}],"functions":{"api/index.py":{"includeFiles":"data/documents.db, app/static/**"}},"routes":[{"dest":"api/index.py","src":"/(.*)"}]}
+{"functions":{"api/index.py":{"includeFiles":"data/documents.db, app/static/**"}},"rewrites":[{"destination":"/api/index.py","source":"/(.*)"}]}
