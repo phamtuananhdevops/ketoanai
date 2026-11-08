@@ -1,0 +1,230 @@
+# KeToanAI — weekly legal-document collection
+#
+# What this does
+#   1. Runs the Cong bao collector against a SCRATCH SQLite DB (one fresh DB
+#      per run, under $RUNNER_TEMP — never in the repo).
+#   2. Upserts the fresh SQLite DB into Supabase Postgres via
+#      db/migrate_sqlite_to_postgres.py.
+#   3. Uploads any saved original PDFs to Supabase Storage (bucket
+#      'legal-docs') via db/upload_originals.py.
+#
+# SECRETS — set at: repo Settings -> Secrets and variables -> Actions
+#   SUPABASE_DB_URL           Postgres connection string for the migration
+#                             (mapped to env DATABASE_URL, which the migration
+#                             script reads). Example:
+#                             postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres
+#   SUPABASE_URL              Supabase project URL, e.g. https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY Supabase service_role key (server-side only;
+#                             NEVER the anon key, NEVER commit it anywhere).
+#   No other secrets are needed. If a secret is missing the run fails loudly
+#   at the step that needs it — nothing is silently skipped.
+#
+# DESIGN DECISION (read this before "improving" the pipeline)
+#   The collector (collector/congbao_collector.py) writes SQLite ONLY — it has
+#   no Postgres mode and does NOT write to Postgres directly. The workflow
+#   therefore pipelines collector (SQLite) -> migration script (Postgres).
+#   This is deliberate, not a workaround: the collector stays a pure
+#   fetch-and-parse tool that can run anywhere (including offline against
+#   --local-pdfs), and all Postgres knowledge lives in the migration script.
+#   TODO (future): add a --postgres mode to the collector so it can upsert
+#   straight into Postgres; until then, DO NOT pretend the collector talks
+#   to Postgres — the migration step below is load-bearing.
+#
+# KNOWN TRADE-OFF — full re-fetch every run
+#   Because the SQLite DB is a fresh scratch file each run, the collector's
+#   "--all skips rows already in the DB" shortcut never applies here: every
+#   weekly run re-downloads the whole target list. That is SAFE (the migration
+#   upserts by URL/sha256, so re-ingesting changes nothing in Postgres) but
+#   NOT incremental — the first/live runs are the longest. If run time becomes
+#   a problem, the fix is to make the collector skip docs already present in
+#   Postgres (or persist the scratch DB as an artifact), not to weaken the
+#   upsert. The 120-minute timeout below is sized for a cold full-corpus run.
+#
+# ROBOTS / POLITENESS — hard constraints, enforced inside the collector
+# (congbao_collector.py: check_robots_policy + 1 req/s pacing). Restated here
+# so nobody "optimises" the workflow past them:
+#   * VBPL (vbpl.vn): NEVER request /api/ or /Pages/ (robots.txt disallows
+#     both). The collector refuses such URLs outright.
+#   * Cong bao (congbao.chinhphu.vn): max 1 request/second, identifiable
+#     User-Agent, retries with exponential backoff.
+#   * Only official domains are ever fetched (allowlist in the collector:
+#     congbao.chinhphu.vn, congbaocdn.chinhphu.vn, g7.cdnchinhphu.vn,
+#     api-searchcongbao.chinhphu.vn, vbpl.vn). Do not add other sources here.
+#
+# REQUIREMENTS FILE — why requirements-collector.txt, not requirements.txt
+#   The repo's requirements.txt is the FastAPI app's (fastapi, uvicorn, httpx,
+#   beautifulsoup4) and does NOT include pymupdf or psycopg. The scheduler
+#   installs from a SEPARATE requirements-collector.txt at the repo root so
+#   the collector job installs only what it needs and the app's deploy is
+#   untouched. That file must contain (pinned by the collector's own
+#   requirements): httpx, beautifulsoup4, pymupdf, psycopg[binary].
+#   psycopg[binary] is for the migration script (Postgres), not the collector.
+#
+# NO COMMITS — this workflow commits NOTHING back to the repo. The SQLite DB,
+# results CSV and any originals live only in the runner's temp dir (and, on
+# failure, as a short-lived Actions artifact for debugging). There is no
+# SQLite file in the repo anymore: Postgres is the store of record.
+#
+# FAILURE POLICY — the workflow fails loudly. There is no `continue-on-error`,
+# no `|| true`, no swallowed exit code anywhere. A failed collector, migration
+# or upload fails the whole run and GitHub notifies per repo settings.
+#
+# FILES THAT MUST EXIST IN THE REPO BEFORE THE FIRST RUN
+#   (the pre-flight step below checks all of these and fails fast if any is
+#   missing — do not delete the check). All of them are present in the
+#   ketoan-ai-postgres branch folder as of 08/11/2026:
+#   * requirements-collector.txt            (collector deps — see above)
+#   * collector/congbao_collector.py        (copy of the canonical collector)
+#   * collector/vbpl_html_ingest.py         (4 HTML-only VBPL docs; runs into
+#                                            the same scratch DB, see workflow)
+#   * collector/save_originals.py           (saves original PDFs/HTML)
+#   * danh-sach-100-van-ban/danh-sach-100-van-ban.csv
+#                                            (100-doc target list; the
+#                                            collector's --all default path)
+#   * db/migrate_sqlite_to_postgres.py      (verified 08/11: reads DATABASE_URL
+#                                            env, takes the SQLite path as
+#                                            --sqlite; opens SQLite read-only)
+#   * db/upload_originals.py                (verified 08/11 --dry-run; live
+#                                            upload untested without Supabase)
+
+name: Collect legal documents
+
+on:
+  schedule:
+    # Sunday 17:00 UTC = Monday 00:00 Asia/Ho_Chi_Minh (+07).
+    # Low-traffic window: Sunday night UTC / Monday midnight in Vietnam,
+    # so the week's new gazette documents are picked up before Monday work.
+    - cron: "0 17 * * 0"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Re-parse and re-store even when text sha256 is unchanged (collector --force; use after a parser fix)"
+        type: boolean
+        default: false
+
+# Two runs must never overlap: a second scheduled/manual run waits for the
+# running one instead of racing it on the same Postgres tables.
+# cancel-in-progress: false — never kill a run mid-migration.
+concurrency:
+  group: collect-legal-documents
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120 # cold full-corpus re-fetch; see header trade-off note
+    env:
+      SCRATCH_DB: ${{ runner.temp }}/documents.db
+      RESULTS_CSV: ${{ runner.temp }}/results.csv
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install collector dependencies
+        # Separate file from the app's requirements.txt — see header comment.
+        run: pip install -r requirements-collector.txt
+
+      - name: Pre-flight — verify every file the run depends on
+        # Fails fast with a readable message instead of a confusing traceback
+        # halfway through the collector run. Update this list if a path moves.
+        run: |
+          set -euo pipefail
+          for f in \
+            requirements-collector.txt \
+            collector/congbao_collector.py \
+            collector/vbpl_html_ingest.py \
+            collector/save_originals.py \
+            danh-sach-100-van-ban/danh-sach-100-van-ban.csv \
+            db/migrate_sqlite_to_postgres.py \
+            db/upload_originals.py; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing required file: $f (see header comment in .github/workflows/collect.yml)"
+              exit 1
+            fi
+          done
+          echo "Pre-flight OK: all required files present."
+
+      - name: Run collector (--all, scratch SQLite DB)
+        # Idempotent at the Postgres level: --all ingests every target-list
+        # row into the fresh scratch DB; the migration step upserts, so
+        # re-running changes nothing already stored. The collector writes
+        # SQLite ONLY — it does not touch Postgres (see header design note).
+        # --results-csv records per-document outcomes for the failure artifact.
+        run: |
+          set -euo pipefail
+          python collector/congbao_collector.py --all \
+            --db "$SCRATCH_DB" \
+            --results-csv "$RESULTS_CSV" \
+            ${{ inputs.force && '--force' || '' }}
+
+      - name: Ingest VBPL HTML-only documents
+        # The 4 documents with no Công báo detail page and no downloadable
+        # file on VBPL (13/2008/QH12, 124/2008/NĐ-CP, 48/2006/QĐ-BTC,
+        # 51/2010/NĐ-CP) are ingested from VBPL's rendered HTML into the
+        # same scratch DB. Without this step a cold run would only reach
+        # 79/100 documents. The script exits non-zero unless all 4 ingest.
+        run: |
+          set -euo pipefail
+          python collector/vbpl_html_ingest.py --db "$SCRATCH_DB"
+
+      - name: Migrate SQLite -> Supabase Postgres
+        # The migration script reads DATABASE_URL and upserts new/changed docs.
+        # Secret SUPABASE_DB_URL is mapped to that env name here; the secret
+        # itself is never printed (GitHub masks secrets in logs).
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          python db/migrate_sqlite_to_postgres.py --sqlite "$SCRATCH_DB"
+
+      - name: Save original PDFs/HTML
+        # Re-fetches the original file of every document in the scratch DB
+        # (Công báo PDFs via direct congbaocdn links; VBPL HTML docs as .html)
+        # into collector/originals/ + collector/manifest.csv. Idempotent via
+        # manifest sha256, but the runner is fresh each week so this normally
+        # re-downloads the corpus (~134 MB). 1 req/s politeness applies.
+        run: |
+          set -euo pipefail
+          python collector/save_originals.py --db "$SCRATCH_DB" --out collector/originals
+
+      - name: Check for saved original PDFs
+        # Gate for the upload step below: runs only when the save step above
+        # produced files. Skipped (not faked) when there is nothing to upload.
+        id: originals
+        run: |
+          set -euo pipefail
+          if [ -d collector/originals ] && [ -n "$(find collector/originals -type f -print -quit)" ]; then
+            echo "has_originals=true" >> "$GITHUB_OUTPUT"
+            echo "Found originals to upload:"
+            find collector/originals -type f | head -20
+          else
+            echo "has_originals=false" >> "$GITHUB_OUTPUT"
+            echo "No originals/ tree — skipping Storage upload."
+          fi
+
+      - name: Upload originals to Supabase Storage (bucket 'legal-docs')
+        if: steps.originals.outputs.has_originals == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          python db/upload_originals.py
+
+      - name: Upload scratch DB + results as debug artifact (on failure only)
+        # Debugging aid only: a short-lived Actions artifact, NOT a commit.
+        # The job still fails — this step never masks the failure.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collect-failure-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/documents.db
+            ${{ runner.temp }}/results.csv
+          retention-days: 7
