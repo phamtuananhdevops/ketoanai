@@ -204,13 +204,17 @@ jobs:
       - name: Check for saved original PDFs
         # Gate for the upload step below: runs only when the save step above
         # produced files. Skipped (not faked) when there is nothing to upload.
+        # NOTE: do NOT pipe find into `head` here. With `set -o pipefail`,
+        # head closing the pipe after N lines makes find die with SIGPIPE
+        # ("Broken pipe" / "write error") and fails the whole step — that
+        # killed run #11 even though all 139 originals were saved fine.
+        # Counting via wc -l never closes the pipe early, so it is safe.
         id: originals
         run: |
           set -euo pipefail
           if [ -d collector/originals ] && [ -n "$(find collector/originals -type f -print -quit)" ]; then
             echo "has_originals=true" >> "$GITHUB_OUTPUT"
-            echo "Found originals to upload:"
-            find collector/originals -type f | head -20
+            echo "Found originals to upload: $(find collector/originals -type f | wc -l) files"
           else
             echo "has_originals=false" >> "$GITHUB_OUTPUT"
             echo "No originals/ tree — skipping Storage upload."
