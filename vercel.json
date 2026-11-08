@@ -1,1 +1,1 @@
-{"functions":{"api/index.py":{"includeFiles":"data/documents.db, app/static/**"}},"rewrites":[{"destination":"/api/index.py","source":"/(.*)"}]}
+{"functions":{"api/index.py":{"includeFiles":"app/static/**"}},"rewrites":[{"destination":"/api/index.py","source":"/(.*)"}]}
