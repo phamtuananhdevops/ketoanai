@@ -113,9 +113,12 @@ jobs:
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 120 # cold full-corpus re-fetch; see header trade-off note
-    env:
-      SCRATCH_DB: ${{ runner.temp }}/documents.db
-      RESULTS_CSV: ${{ runner.temp }}/results.csv
+    # NOTE: no job-level env for SCRATCH_DB/RESULTS_CSV. GitHub does NOT
+    # allow the `runner` context in job-level `env` (workflow fails to
+    # parse: "Unrecognized named-value: 'runner'"). Each step that needs
+    # them sets them from the $RUNNER_TEMP shell variable instead.
+    # `${{ runner.temp }}` IS valid inside step `with:` (see the failure
+    # artifact below) — only job-level env is forbidden.
 
     steps:
       - name: Checkout repo
@@ -158,6 +161,8 @@ jobs:
         # --results-csv records per-document outcomes for the failure artifact.
         run: |
           set -euo pipefail
+          SCRATCH_DB="$RUNNER_TEMP/documents.db"
+          RESULTS_CSV="$RUNNER_TEMP/results.csv"
           python collector/congbao_collector.py --all \
             --db "$SCRATCH_DB" \
             --results-csv "$RESULTS_CSV" \
@@ -171,6 +176,7 @@ jobs:
         # 79/100 documents. The script exits non-zero unless all 4 ingest.
         run: |
           set -euo pipefail
+          SCRATCH_DB="$RUNNER_TEMP/documents.db"
           python collector/vbpl_html_ingest.py --db "$SCRATCH_DB"
 
       - name: Migrate SQLite -> Supabase Postgres
@@ -181,6 +187,7 @@ jobs:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
+          SCRATCH_DB="$RUNNER_TEMP/documents.db"
           python db/migrate_sqlite_to_postgres.py --sqlite "$SCRATCH_DB"
 
       - name: Save original PDFs/HTML
@@ -191,6 +198,7 @@ jobs:
         # re-downloads the corpus (~134 MB). 1 req/s politeness applies.
         run: |
           set -euo pipefail
+          SCRATCH_DB="$RUNNER_TEMP/documents.db"
           python collector/save_originals.py --db "$SCRATCH_DB" --out collector/originals
 
       - name: Check for saved original PDFs
