@@ -300,7 +300,10 @@ def compare(a:int=Query(...),b:int=Query(...)):
   return doc,{k:'\n'.join(v) for k,v in grouped.items()}
  da,pa=_load(a);db,pb=_load(b)
  keys=set(pa)|set(pb);changes=[]
- for k in sorted(keys,key=lambda x:(x[0] if x[0] is not None else -1,x[1] or '',x[2] or '')):
+ # Sort key phải cùng kiểu mọi phần tử: khoan là INT hoặc NULL (1.060 dòng
+ # NULL) nên `x[1] or ''` trộn int với str -> TypeError -> 500 trên live.
+ # Dùng chuỗi đệm số 0: dieu/khoan sắp xếp theo số, diem theo chữ.
+ for k in sorted(keys,key=lambda x:f"{x[0] or 0:06d}|{x[1] if x[1] is not None else -1:06d}|{x[2] or ''}"):
   ta,tb=pa.get(k),pb.get(k)
   if ta is None:typ='added'
   elif tb is None:typ='removed'
