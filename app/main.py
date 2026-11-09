@@ -75,8 +75,13 @@ def _retrieve(question,profile_cats=None,limit=8):
  bigrams=[' '.join(kws[i:i+2]) for i in range(len(kws)-1)]
  if USE_PG:
   with pg() as c:
-   dfs=c.execute('SELECT '+','.join(['SUM(CASE WHEN text ILIKE %s THEN 1 ELSE 0 END)']*(len(kws)+len(bigrams)))+' FROM provisions',[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]).fetchone()
-  dfs=[d or 0 for d in dfs]
+   # psycopg dict_row: SELECT SUM(...), SUM(...) không đặt tên sẽ gộp hết
+   # thành một cột 'sum' duy nhất -> phải đặt alias riêng từng cột (s0, s1...)
+   # rồi đọc theo alias; lặp trực tiếp trên dict chỉ ra tên cột (str) -> lỗi
+   # TypeError ở bước tính trọng số (đây là lỗi 500 trên live, SQLite không
+   # bị vì Row trả tuple theo vị trí).
+   row=c.execute('SELECT '+','.join([f'SUM(CASE WHEN text ILIKE %s THEN 1 ELSE 0 END) AS s{i}' for i in range(len(kws)+len(bigrams))])+' FROM provisions',[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]).fetchone()
+  dfs=[row[f's{i}'] or 0 for i in range(len(kws)+len(bigrams))]
   w=[1/((1+df/100)**0.5) for df in dfs[:len(kws)]]
   wb=[4/((1+df/10)**0.5) for df in dfs[len(kws):]]
   def _case(col,weight):return f'(CASE WHEN {col} ILIKE %s THEN {weight:.4f} ELSE 0 END)'
