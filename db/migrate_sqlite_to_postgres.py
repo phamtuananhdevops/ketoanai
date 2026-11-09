@@ -387,6 +387,25 @@ def run_live(docs, provisions, logs, database_url):
                     number_to_id[d["number"]] = cur.fetchone()[0]
 
                 # 2. Provisions, linked by Postgres document_id.
+                # DELETE each migrated document's existing provisions
+                # BEFORE upserting its new set. The upsert key includes
+                # `ordinal`, a positional index: any parser change that
+                # inserts rows early (e.g. the 09/11/2026 VAS preamble
+                # split, which turned 156/2013's one-row preamble into
+                # ~327 rows) shifts every later row's ordinal, so the
+                # upsert can no longer match old rows to new rows and the
+                # old ones linger as duplicates (run #15 left ~1,653 stale
+                # rows: 156/2013 1,035 old + 1,361 new, 195/2012 618 + 839).
+                # Replace-wholesale per document is safe here: provisions
+                # are fully derived from the scratch SQLite, the DELETE
+                # runs inside the same transaction (rolls back on error),
+                # and it only touches documents present in this run —
+                # documents absent from the scratch DB keep their rows.
+                for _doc_id in number_to_id.values():
+                    cur.execute(
+                        "DELETE FROM provisions WHERE document_id = %s",
+                        (_doc_id,),
+                    )
                 prov_params = []
                 missing = 0
                 for p in provisions:
