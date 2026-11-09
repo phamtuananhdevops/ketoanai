@@ -75,8 +75,14 @@
 #   ketoan-ai-postgres branch folder as of 08/11/2026:
 #   * requirements-collector.txt            (collector deps — see above)
 #   * collector/congbao_collector.py        (copy of the canonical collector)
-#   * collector/vbpl_html_ingest.py         (4 HTML-only VBPL docs; runs into
+#   * collector/vbpl_html_ingest.py         (16 HTML VBPL docs; runs into
 #                                            the same scratch DB, see workflow)
+#   * collector/local-pdfs/                 (4 converted PDFs for docs with
+#                                            no Công báo listing and no full
+#                                            VBPL HTML: 234/2003, 12/2005,
+#                                            100/2005, 15/2006 — ingested by
+#                                            the --local-pdfs step below;
+#                                            source URLs in LOCAL_PDF_SOURCE_URLS)
 #   * collector/save_originals.py           (saves original PDFs/HTML)
 #   * danh-sach-100-van-ban/danh-sach-100-van-ban.csv
 #                                            (100-doc target list; the
@@ -142,6 +148,10 @@ jobs:
             requirements-collector.txt \
             collector/congbao_collector.py \
             collector/vbpl_html_ingest.py \
+            collector/local-pdfs/234-2003-QD-BTC.pdf \
+            collector/local-pdfs/12-2005-QD-BTC.pdf \
+            collector/local-pdfs/100-2005-QD-BTC.pdf \
+            collector/local-pdfs/15-2006-QD-BTC.pdf \
             collector/save_originals.py \
             danh-sach-100-van-ban/danh-sach-100-van-ban.csv \
             db/migrate_sqlite_to_postgres.py \
@@ -169,15 +179,33 @@ jobs:
             ${{ inputs.force && '--force' || '' }}
 
       - name: Ingest VBPL HTML-only documents
-        # The 4 documents with no Công báo detail page and no downloadable
-        # file on VBPL (13/2008/QH12, 124/2008/NĐ-CP, 48/2006/QĐ-BTC,
-        # 51/2010/NĐ-CP) are ingested from VBPL's rendered HTML into the
-        # same scratch DB. Without this step a cold run would only reach
-        # 79/100 documents. The script exits non-zero unless all 4 ingest.
+        # The 16 documents with no Công báo detail page but full rendered
+        # HTML on VBPL (the original 4: 13/2008/QH12, 124/2008/NĐ-CP,
+        # 48/2006/QĐ-BTC, 51/2010/NĐ-CP; plus 12 from the 09/11/2026
+        # browser-download round: 105/2003, 161/2007, 91/2022, 954/2020,
+        # 149/2001, 165/2002, 20/2006, 21/2006, 14/2008, 123/2012,
+        # 26/2012, 100/2008) are ingested from VBPL's rendered HTML into
+        # the same scratch DB. Without this step a cold run would only
+        # reach 83/100 documents. The script exits non-zero unless all 16
+        # ingest.
         run: |
           set -euo pipefail
           SCRATCH_DB="$RUNNER_TEMP/documents.db"
           python collector/vbpl_html_ingest.py --db "$SCRATCH_DB"
+
+      - name: Ingest local VBPL PDFs
+        # The 4 documents with neither a Công báo detail page nor full
+        # VBPL HTML (234/2003, 12/2005, 100/2005, 15/2006) are ingested
+        # from the converted PDFs committed in collector/local-pdfs/
+        # (originals downloaded from VBPL gateway 09/11/2026, .doc ->
+        # PDF via LibreOffice). Source URLs live in LOCAL_PDF_SOURCE_URLS
+        # in congbao_collector.py. Without this step a cold run reaches
+        # 95/100; with it, 99/100 (only 04/2007/QH12 still missing).
+        run: |
+          set -euo pipefail
+          SCRATCH_DB="$RUNNER_TEMP/documents.db"
+          python collector/congbao_collector.py --db "$SCRATCH_DB" \
+            --local-pdfs collector/local-pdfs
 
       - name: Migrate SQLite -> Supabase Postgres
         # The migration script reads DATABASE_URL and upserts new/changed docs.
