@@ -1,7 +1,124 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KeToanAI | Kho văn bản</title><style>
-:root{font-family:system-ui,-apple-system,sans-serif;color:#172b40;background:#f3f6fb}*{box-sizing:border-box}body{margin:0}header{background:#102a43;color:white;padding:20px max(20px,calc((100% - 1050px)/2))}header strong{font-size:24px}header span{color:#b8cbe1}main{max-width:1050px;margin:28px auto;padding:0 18px}.hero{padding:30px;background:linear-gradient(120deg,#143a63,#1d6c83);border-radius:16px;color:white}.hero h1{margin:0 0 10px}.hero p{color:#dcebf3}.stats{display:flex;gap:12px;margin:20px 0}.stat{flex:1;background:white;padding:20px;border-radius:12px;border:1px solid #dfe8f1}.stat b{font-size:28px;color:#1b6081}.stat small{display:block;color:#607389}.panel{background:white;padding:22px;border-radius:14px;border:1px solid #dfe8f1;margin-top:20px}input,select,button{font:inherit;padding:12px;border:1px solid #cbd8e4;border-radius:8px}input{min-width:0;flex:1}button{background:#146582;color:white;cursor:pointer;border:none}button:hover{background:#104f66}.search{display:flex;gap:10px;flex-wrap:wrap}.search select{min-width:140px}.doc{padding:16px 0;border-bottom:1px solid #edf0f4}.doc a{font-weight:700;color:#155d7d;text-decoration:none}.meta{color:#697b8b;font-size:13px;margin-top:6px}.notice{background:#fff8e9;border:1px solid #f0d89b;padding:12px;border-radius:9px;color:#79551d;font-size:13px}details{margin-top:20px}summary{cursor:pointer;font-weight:700}.form{display:grid;gap:10px;margin-top:12px}.form input{width:100%}#status{font-size:13px;color:#526f85;white-space:pre-wrap}@media(max-width:600px){.stats{flex-direction:column}.hero{padding:22px}.search{flex-direction:column}.search>*{width:100%}}
-</style></head><body><header><strong>⚖ KeToanAI</strong><div><span>Accounting & Tax Intelligence · Bản MVP thử nghiệm</span></div></header><main><section class="hero"><h1>Tra cứu văn bản kế toán & thuế Việt Nam</h1><p>Kho dữ liệu thử nghiệm từ nguồn công khai. Chưa có phân tích AI hoặc xác nhận hiệu lực tự động.</p></section><div class="stats"><div class="stat"><b id="total">—</b><small>Văn bản trong kho</small></div><div class="stat"><b id="full">—</b><small>Đã thu nội dung HTML</small></div><div class="stat"><b id="verified">—</b><small>Đã xác minh thủ công</small></div></div><section class="panel"><h2>Tìm văn bản</h2><div class="search"><input id="query" placeholder="Số hiệu, tên hoặc từ khóa..."/><select id="category"><option value="">Tất cả lĩnh vực</option><option>Kế toán</option><option>Thuế GTGT</option><option>Thuế TNDN</option><option>Hóa đơn</option><option>Thuế TNCN</option></select><button onclick="load()">Tìm kiếm</button></div><div id="results" aria-live="polite"></div></section><section class="panel"><h2>Dữ liệu được biên tập sẵn</h2><p class="notice">Bản công khai chỉ tra cứu, không nhận thêm văn bản. Dữ liệu do quản trị viên cập nhật rồi deploy bản mới — mỗi văn bản đều có nguồn chính thức kèm theo để đối chiếu.</p></section><p class="meta">Nguồn chính: <a href="https://vbpl.vn/">VBPL</a> · <a href="https://congbao.chinhphu.vn/">Công báo</a> · <a href="https://www.mof.gov.vn/">Bộ Tài chính</a> · <a href="https://www.gdt.gov.vn/">Cơ quan Thuế</a></p></main><script>
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KeToanAI — Trung tâm thông tin kế toán &amp; thuế</title>
+<style>:root{font-family:system-ui,-apple-system,sans-serif;color:#172b40;background:#f3f6fb}*{box-sizing:border-box}body{margin:0}header{background:#102a43;color:#fff;padding:20px max(20px,calc((100% - 1050px)/2))}header strong{font-size:24px}header span{color:#b8cbe1}main{max-width:1050px;margin:28px auto;padding:0 18px}.hero{padding:30px;background:linear-gradient(120deg,#143a63,#1d6c83);border-radius:16px;color:#fff}.hero h1{margin:0 0 10px}.hero p{color:#dcebf3}.stats{display:flex;gap:12px;margin:20px 0}.stat{flex:1;background:#fff;padding:20px;border-radius:12px;border:1px solid #dfe8f1}.stat b{font-size:28px;color:#1b6081}.stat small{display:block;color:#607389}.panel{background:#fff;padding:22px;border-radius:14px;border:1px solid #dfe8f1;margin-top:20px}input,select,button,textarea{font:inherit;padding:12px;border:1px solid #cbd8e4;border-radius:8px}input,textarea{min-width:0;flex:1}button{background:#146582;color:#fff;cursor:pointer;border:none}button:hover{background:#104f66}button.ghost{background:#fff;color:#146582;border:1px solid #146582}.search{display:flex;gap:10px;flex-wrap:wrap}.search select{min-width:140px}.doc{padding:16px 0;border-bottom:1px solid #edf0f4}.doc a{font-weight:700;color:#155d7d;text-decoration:none;cursor:pointer}.doc a:hover{text-decoration:underline}.meta{color:#697b8b;font-size:13px;margin-top:6px}.notice{background:#fff8e9;border:1px solid #f0d89b;padding:12px;border-radius:9px;color:#79551d;font-size:13px}details{margin-top:20px}summary{cursor:pointer;font-weight:700}.tag{display:inline-block;background:#e6f0f7;color:#146582;border-radius:6px;padding:2px 8px;font-size:12px;margin-right:6px}.tag.warn{background:#fff3d6;color:#79551d}.tag.ok{background:#e2f3e5;color:#1e6b34}h2{font-size:20px;margin:0 0 12px}h3{font-size:16px;margin:18px 0 8px}.check{list-style:none;padding:0}.check li{padding:8px 0 8px 28px;position:relative;border-bottom:1px solid #f0f3f6}.check li:before{content:"☐";position:absolute;left:0;color:#146582}.prov{border-bottom:1px solid #edf0f4;padding:10px 0}.prov b{color:#155d7d}.prov p{margin:6px 0 0;white-space:pre-wrap;font-size:14px}.diff-add{background:#e2f3e5}.diff-rem{background:#fde8e8}.diff-chg{background:#fff3d6}.diff{padding:10px;border-radius:8px;margin:8px 0;font-size:14px}.diff b{display:block;margin-bottom:4px}.diff pre{white-space:pre-wrap;margin:4px 0;font:inherit}.muted{color:#697b8b;font-size:13px}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1}.row button{flex:0 0 auto}#status{font-size:13px;color:#526f85;white-space:pre-wrap}@media(max-width:600px){.stats{flex-direction:column}.hero{padding:22px}.search{flex-direction:column}.search>*{width:100%}}</style>
+</head><body>
+<header><strong>KeToanAI</strong> <span>Trung tâm thông tin kế toán &amp; thuế</span></header>
+<main>
+<div class="hero"><h1>Hôm nay bạn cần biết gì?</h1><p>Quy định nào vừa thay đổi? Nó ảnh hưởng gì đến doanh nghiệp của bạn? Và bạn phải làm gì? KeToanAI trả lời ba câu hỏi đó từ văn bản gốc — Công báo và VBPL.</p></div>
+<div class="stats">
+<div class="stat"><b id="c-new">—</b><small>Văn bản mới (30 ngày)</small></div>
+<div class="stat"><b id="c-up">—</b><small>Sắp có hiệu lực</small></div>
+<div class="stat"><b id="c-rev">—</b><small>Cần xem xét (chưa kiểm chứng)</small></div>
+</div>
+
+<div class="panel"><h2>Hỏi trợ lý KeToanAI</h2>
+<div class="search"><input id="ask" placeholder="Ví dụ: Quy định mới về hóa đơn điện tử ảnh hưởng thế nào đến công ty tôi?"><button onclick="askAI()">Hỏi</button></div>
+<p id="ask-out" class="muted" style="margin-top:10px">Trợ lý AI trả lời kèm trích dẫn đúng văn bản và điều khoản — đang được xây dựng trên kho văn bản đã kiểm chứng (AI RAG · sắp có). Trong lúc chờ, bạn dùng tra cứu bên dưới, mọi kết quả đều dẫn về văn bản gốc.</p></div>
+
+<div class="panel"><h2>Văn bản cần quan tâm</h2>
+<div class="search"><select id="f-cat"><option value="">Tất cả lĩnh vực</option></select><button class="ghost" onclick="loadChanges()">Lọc</button></div>
+<h3>Mới thu thập</h3><div id="list-new"></div>
+<h3>Mới có hiệu lực gần đây</h3><div id="list-recent"></div>
+<h3>Sắp có hiệu lực</h3><div id="list-up"></div>
+</div>
+
+<div class="panel"><h2>Công việc cần thực hiện</h2><p class="muted" id="todo-doc">Checklist cho văn bản mới nhất — cập nhật theo từng văn bản.</p><div id="todo-body"></div></div>
+
+<div class="panel"><h2>Tra cứu văn bản</h2>
+<div class="search"><input id="query" placeholder="Tìm số hiệu, tên văn bản, nội dung…"><select id="category"><option value="">Tất cả lĩnh vực</option></select><select id="status"><option value="">Mọi trạng thái</option><option value="collected">Đã thu thập</option><option value="source_verified">Đã xác nhận nguồn</option><option value="legal_verified">Đã kiểm chứng pháp lý</option></select><button onclick="load()">Tìm</button></div>
+<p class="muted">Tổng số: <b id="total">—</b> văn bản · Có toàn văn: <b id="full">—</b> · Đã kiểm chứng pháp lý: <b id="verified">—</b></p>
+<div id="results"></div></div>
+
+<div class="panel" id="detail" style="display:none"><h2 id="d-title"></h2><div class="meta" id="d-meta"></div>
+<div id="d-facts"></div><h3>Doanh nghiệp cần làm gì?</h3><p class="muted">Checklist tham khảo theo lĩnh vực — mẫu chung, không phải kết luận pháp lý cho từng doanh nghiệp. Đối chiếu với văn bản gốc trước khi áp dụng.</p><ul class="check" id="d-check"></ul>
+<h3>Văn bản liên quan</h3><div id="d-rel"></div>
+<h3>Điều khoản</h3><div id="d-prov"></div>
+<div class="row" style="margin-top:16px"><button class="ghost" onclick="openCompare(document.getElementById('detail').dataset.id)">So sánh với văn bản khác</button><button class="ghost" onclick="document.getElementById('detail').style.display='none'">Đóng</button></div></div>
+
+<div class="panel" id="compare" style="display:none"><h2>So sánh quy định cũ — mới</h2>
+<p class="muted">Chọn hai văn bản để xem điều khoản nào được thêm mới, bãi bỏ, thay đổi nội dung. So sánh theo từng Điều / Khoản / Điểm.</p>
+<div class="row"><select id="cmp-a"></select><select id="cmp-b"></select><button onclick="runCompare()">So sánh</button></div>
+<div id="cmp-out" style="margin-top:14px"></div></div>
+
+<p class="notice" style="margin-top:20px">Dữ liệu từ Công báo Chính phủ và VBPL (Bộ Tư pháp). Văn bản gắn trạng thái “đã thu thập” nghĩa là đã tải được toàn văn, chưa kiểm chứng hiệu lực pháp lý. Luôn đối chiếu văn bản gốc trước khi áp dụng.</p>
+<p id="status"></p>
+</main>
+<script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function load(){const q=document.getElementById('query').value,category=document.getElementById('category').value;try{const r=await fetch('/api/documents?'+new URLSearchParams({q,category}));const docs=await r.json();document.getElementById('results').innerHTML=docs.length?docs.map(d=>`<div class="doc"><a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">${esc(d.number||'Văn bản')} — ${esc(d.title)}</a><div class="meta">${esc(d.category)} · Ban hành: ${esc(d.issued_date||'Chưa xác định')} · Hiệu lực: ${esc(d.effective_date||'Chưa xác minh')} · ${esc(d.review_status)}</div></div>`).join(''):'<p>Chưa có văn bản phù hợp.</p>';const s=await(await fetch('/api/stats')).json();total.textContent=s.documents;full.textContent=s.with_text;verified.textContent=s.verified;}catch(e){results.textContent='Không kết nối được API: '+e.message}}
-query.addEventListener('keydown',e=>{if(e.key==='Enter')load()});load();
+const stTag=s=>s==='legal_verified'?'<span class="tag ok">Đã kiểm chứng pháp lý</span>':s==='source_verified'?'<span class="tag ok">Đã xác nhận nguồn</span>':'<span class="tag warn">Chưa kiểm chứng</span>';
+const fmt=d=>d||'Chưa xác minh';
+function docRow(d){return `<div class="doc"><a onclick="openDetail(${d.id})">${esc(d.number||'Văn bản')} — ${esc(d.title)}</a><div class="meta">${esc(d.category)} · Ban hành: ${fmt(d.issued_date)} · Hiệu lực: ${fmt(d.effective_date)} · ${stTag(d.status||d.review_status)}</div></div>`}
+async function j(u){const r=await fetch(u);if(!r.ok)throw new Error('Lỗi '+r.status);return r.json()}
+async function loadChanges(){
+ const cat=document.getElementById('f-cat').value;
+ const ch=await j('/api/changes?limit=10'+(cat?'&category='+encodeURIComponent(cat):''));
+ document.getElementById('c-new').textContent=ch.counts.new_30d;
+ document.getElementById('c-up').textContent=ch.counts.upcoming;
+ document.getElementById('c-rev').textContent=ch.counts.needs_review;
+ const put=(id,arr,empty)=>{document.getElementById(id).innerHTML=arr.length?arr.map(docRow).join(''):`<p class="muted">${empty}</p>`};
+ put('list-new',ch.new_docs,'Không có văn bản mới trong 30 ngày qua.');
+ put('list-recent',ch.recently_effective,'Không có văn bản mới có hiệu lực gần đây.');
+ put('list-up',ch.upcoming_effective,'Hiện chưa có văn bản nào sắp có hiệu lực trong 90 ngày tới.');
+ const sel=document.getElementById('f-cat');
+ if(sel.options.length<=1)ch.categories.forEach(c=>{const o=document.createElement('option');o.value=c.category;o.textContent=`${c.category} (${c.count})`;sel.appendChild(o)});
+ if(ch.new_docs.length){const first=ch.new_docs[0];document.getElementById('todo-doc').textContent='Văn bản mới nhất: '+first.number+' — '+first.title;showImpact(first.id)}
+}
+async function showImpact(id){
+ try{const im=await j('/api/documents/'+id+'/impact');
+ document.getElementById('todo-body').innerHTML='<p>'+im.facts.map(esc).join('<br>')+'</p><ul class="check">'+im.checklist.map(c=>'<li>'+esc(c)+'</li>').join('')+'</ul><p class="muted">'+esc(im.checklist_note)+'</p>';
+ }catch(e){document.getElementById('todo-body').innerHTML='<p class="muted">Chưa tải được checklist.</p>'}
+}
+async function load(){
+ const q=document.getElementById('query').value,category=document.getElementById('category').value,status=document.getElementById('status').value;
+ try{const docs=await j('/api/documents?'+new URLSearchParams({q,category,status}));
+ document.getElementById('results').innerHTML=docs.length?docs.map(docRow).join(''):'<p>Chưa có văn bản phù hợp.</p>';
+ const s=await j('/api/stats');document.getElementById('total').textContent=s.documents;document.getElementById('full').textContent=s.with_text;document.getElementById('verified').textContent=s.verified;
+ const cs=document.getElementById('category');
+ if(cs.options.length<=1){const ch=await j('/api/changes?limit=1');ch.categories.forEach(c=>{const o=document.createElement('option');o.value=c.category;o.textContent=c.category;cs.appendChild(o)})}
+ }catch(e){document.getElementById('results').textContent='Không kết nối được API: '+e.message}
+}
+async function openDetail(id){
+ const d=await j('/api/documents/'+id);
+ const box=document.getElementById('detail');box.style.display='block';box.dataset.id=id;
+ document.getElementById('d-title').textContent=(d.number||'Văn bản')+' — '+d.title;
+ document.getElementById('d-meta').innerHTML=`${esc(d.category)} · Ban hành: ${fmt(d.issued_date)} · Hiệu lực: ${fmt(d.effective_date)} · ${stTag(d.status)} · <a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">Văn bản gốc</a>`;
+ try{const im=await j('/api/documents/'+id+'/impact');
+ document.getElementById('d-facts').innerHTML='<p>'+im.facts.map(esc).join('<br>')+'</p>';
+ document.getElementById('d-check').innerHTML=im.checklist.map(c=>'<li>'+esc(c)+'</li>').join('');
+ document.getElementById('d-rel').innerHTML=im.related.length?im.related.map(r=>`<div class="doc"><a onclick="openDetail(${r.id})">${esc(r.number)} — ${esc(r.title)}</a><div class="meta">Hiệu lực: ${fmt(r.effective_date)}</div></div>`).join(''):'<p class="muted">Không có văn bản liên quan.</p>';
+ }catch(e){document.getElementById('d-facts').innerHTML='<p class="muted">Chưa tải được phân tích tác động.</p>'}
+ try{const pv=await j('/api/documents/'+id+'/provisions');
+ document.getElementById('d-prov').innerHTML=pv.length?pv.slice(0,60).map(p=>`<div class="prov"><b>Điều ${p.dieu??''}${p.khoan?'.'+p.khoan:''}${p.diem?') '+p.diem:''}</b><p>${esc(p.text)}</p></div>`).join('')+(pv.length>60?`<p class="muted">Hiển thị 60/${pv.length} điều khoản đầu tiên.</p>`:''):'<p class="muted">Văn bản này chưa tách điều khoản.</p>';
+ }catch(e){document.getElementById('d-prov').innerHTML='<p class="muted">Chưa có dữ liệu điều khoản cho văn bản này.</p>'}
+ box.scrollIntoView({behavior:'smooth'});
+}
+async function fillCompareSelects(){
+ const docs=await j('/api/documents?limit=500');
+ const opts=docs.map(d=>`<option value="${d.id}">${esc(d.number)} — ${esc(d.title.slice(0,60))}</option>`).join('');
+ document.getElementById('cmp-a').innerHTML=opts;document.getElementById('cmp-b').innerHTML=opts;
+ document.getElementById('cmp-b').selectedIndex=1;
+}
+function openCompare(id){
+ document.getElementById('compare').style.display='block';
+ if(!document.getElementById('cmp-a').options.length)fillCompareSelects().then(()=>{document.getElementById('cmp-a').value=id});
+ else document.getElementById('cmp-a').value=id;
+ document.getElementById('compare').scrollIntoView({behavior:'smooth'});
+}
+async function runCompare(){
+ const a=document.getElementById('cmp-a').value,b=document.getElementById('cmp-b').value;
+ const out=document.getElementById('cmp-out');out.innerHTML='<p class="muted">Đang so sánh…</p>';
+ try{const r=await j(`/api/compare?a=${a}&b=${b}`);
+ const s=r.summary;
+ out.innerHTML=`<p><b>${esc(r.a.number)}</b> → <b>${esc(r.b.number)}</b> · Thêm mới: <b>${s.added}</b> · Bãi bỏ: <b>${s.removed}</b> · Thay đổi: <b>${s.changed}</b> · Không đổi: <b>${s.unchanged}</b>${r.truncated?' · (chỉ hiển thị 200 thay đổi đầu tiên)':''}</p>`+
+ r.changes.filter(c=>c.type!=='unchanged').map(c=>{const cls=c.type==='added'?'diff-add':c.type==='removed'?'diff-rem':'diff-chg';
+ const lbl=c.type==='added'?'THÊM MỚI':c.type==='removed'?'BÃI BỎ':'THAY ĐỔI';
+ return `<div class="diff ${cls}"><b>${lbl} — Điều ${c.dieu??''}${c.khoan?'.'+c.khoan:''}${c.diem?') '+c.diem:''}</b>${c.a_text?'<pre>Trước: '+esc(c.a_text)+'</pre>':''}${c.b_text?'<pre>Sau: '+esc(c.b_text)+'</pre>':''}</div>`}).join('');
+ }catch(e){out.innerHTML='<p class="notice">Không so sánh được: '+esc(e.message)+'</p>'}
+}
+function askAI(){
+ const q=document.getElementById('ask').value.trim();
+ document.getElementById('ask-out').innerHTML=q?('Câu hỏi của bạn: “'+esc(q)+'” — trợ lý AI đang được xây dựng và sẽ trả lời kèm trích dẫn đúng văn bản, điều khoản. Trong lúc chờ, hãy dùng ô tra cứu bên dưới để tìm văn bản liên quan.'):'Hãy nhập câu hỏi về kế toán, thuế — ví dụ: chi phí tiếp khách có được trừ khi tính thuế TNDN không?';
+}
+loadChanges();load();
 </script></body></html>
