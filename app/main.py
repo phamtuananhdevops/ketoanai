@@ -31,21 +31,22 @@ if READ_WRITE and not USE_PG:
  DB.parent.mkdir(parents=True,exist_ok=True)
 SOURCES={'congbao.chinhphu.vn','vbpl.vn','vanban.chinhphu.vn','mof.gov.vn','www.mof.gov.vn','gdt.gov.vn','www.gdt.gov.vn'}
 # Trạng thái chuẩn của Postgres (bảng documents.status) và nguồn (documents.source).
+# 'luatvietnam' = mirror thứ cấp, chỉ 04/2007/QH12 (giữ 'collected').
 STATUSES=('collected','source_verified','legal_verified')
-PG_SOURCES=('congbao','vbpl','mof','gdt')
+PG_SOURCES=('congbao','vbpl','mof','gdt','luatvietnam')
 # review_status (SQLite/API cũ) <-> status (Postgres). API vẫn trả review_status
 # để tương thích ngược: collected -> 'unverified' (chưa kiểm tra), còn
 # source_verified / legal_verified giữ nguyên tên ở cả hai bên.
 STATUS_TO_REVIEW={'collected':'unverified','source_verified':'source_verified','legal_verified':'legal_verified'}
 REVIEW_TO_STATUS={'unverified':'collected','source_verified':'source_verified','legal_verified':'legal_verified','verified':'legal_verified'}
-SOURCE_HOSTS={'congbao':('congbao.chinhphu.vn',),'vbpl':('vbpl.vn',),'mof':('mof.gov.vn','www.mof.gov.vn'),'gdt':('gdt.gov.vn','www.gdt.gov.vn')}
+SOURCE_HOSTS={'congbao':('congbao.chinhphu.vn',),'vbpl':('vbpl.vn',),'mof':('mof.gov.vn','www.mof.gov.vn'),'gdt':('gdt.gov.vn','www.gdt.gov.vn'),'luatvietnam':('luatvietnam.vn',)}
 def _source_from_url(url):
  # Suy ra source từ hostname — chỉ dùng cho fallback SQLite (không có cột source).
  host=urlparse(url or '').hostname or ''
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
- return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.4')
+ return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'luatvietnam' if 'luatvietnam.vn' in host else 'unknown'
+app=FastAPI(title='KeToanAI',version='0.5.5')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
