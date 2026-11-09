@@ -1,7 +1,20 @@
 <!DOCTYPE html>
 <html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KeToanAI — Trung tâm thông tin kế toán &amp; thuế</title>
-<style>:root{font-family:system-ui,-apple-system,sans-serif;color:#172b40;background:#f3f6fb}*{box-sizing:border-box}body{margin:0}header{background:#102a43;color:#fff;padding:20px max(20px,calc((100% - 1050px)/2))}header strong{font-size:24px}header span{color:#b8cbe1}main{max-width:1050px;margin:28px auto;padding:0 18px}.hero{padding:30px;background:linear-gradient(120deg,#143a63,#1d6c83);border-radius:16px;color:#fff}.hero h1{margin:0 0 10px}.hero p{color:#dcebf3}.stats{display:flex;gap:12px;margin:20px 0}.stat{flex:1;background:#fff;padding:20px;border-radius:12px;border:1px solid #dfe8f1}.stat b{font-size:28px;color:#1b6081}.stat small{display:block;color:#607389}.panel{background:#fff;padding:22px;border-radius:14px;border:1px solid #dfe8f1;margin-top:20px}input,select,button,textarea{font:inherit;padding:12px;border:1px solid #cbd8e4;border-radius:8px}input,textarea{min-width:0;flex:1}button{background:#146582;color:#fff;cursor:pointer;border:none}button:hover{background:#104f66}button.ghost{background:#fff;color:#146582;border:1px solid #146582}.search{display:flex;gap:10px;flex-wrap:wrap}.search select{min-width:140px}.doc{padding:16px 0;border-bottom:1px solid #edf0f4}.doc a{font-weight:700;color:#155d7d;text-decoration:none;cursor:pointer}.doc a:hover{text-decoration:underline}.meta{color:#697b8b;font-size:13px;margin-top:6px}.notice{background:#fff8e9;border:1px solid #f0d89b;padding:12px;border-radius:9px;color:#79551d;font-size:13px}details{margin-top:20px}summary{cursor:pointer;font-weight:700}.tag{display:inline-block;background:#e6f0f7;color:#146582;border-radius:6px;padding:2px 8px;font-size:12px;margin-right:6px}.tag.warn{background:#fff3d6;color:#79551d}.tag.ok{background:#e2f3e5;color:#1e6b34}h2{font-size:20px;margin:0 0 12px}h3{font-size:16px;margin:18px 0 8px}.check{list-style:none;padding:0}.check li{padding:8px 0 8px 28px;position:relative;border-bottom:1px solid #f0f3f6}.check li:before{content:"☐";position:absolute;left:0;color:#146582}.prov{border-bottom:1px solid #edf0f4;padding:10px 0}.prov b{color:#155d7d}.prov p{margin:6px 0 0;white-space:pre-wrap;font-size:14px}.diff-add{background:#e2f3e5}.diff-rem{background:#fde8e8}.diff-chg{background:#fff3d6}.diff{padding:10px;border-radius:8px;margin:8px 0;font-size:14px}.diff b{display:block;margin-bottom:4px}.diff pre{white-space:pre-wrap;margin:4px 0;font:inherit}.muted{color:#697b8b;font-size:13px}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1}.row button{flex:0 0 auto}#status{font-size:13px;color:#526f85;white-space:pre-wrap}@media(max-width:600px){.stats{flex-direction:column}.hero{padding:22px}.search{flex-direction:column}.search>*{width:100%}}</style>
+<style>:root{font-family:system-ui,-apple-system,sans-serif;color:#172b40;background:#f3f6fb}*{box-sizing:border-box}body{margin:0}header{background:#102a43;color:#fff;padding:20px max(20px,calc((100% - 1050px)/2))}header strong{font-size:24px}header span{color:#b8cbe1}main{max-width:1050px;margin:28px auto;padding:0 18px}.hero{padding:30px;background:linear-gradient(120deg,#143a63,#1d6c83);border-radius:16px;color:#fff}.hero h1{margin:0 0 10px}.hero p{color:#dcebf3}.stats{display:flex;gap:12px;margin:20px 0}.stat{flex:1;background:#fff;padding:20px;border-radius:12px;border:1px solid #dfe8f1}.stat b{font-size:28px;color:#1b6081}.stat small{display:block;color:#607389}.panel{background:#fff;padding:22px;border-radius:14px;border:1px solid #dfe8f1;margin-top:20px}input,select,button,textarea{font:inherit;padding:12px;border:1px solid #cbd8e4;border-radius:8px}input,textarea{min-width:0;flex:1}button{background:#146582;color:#fff;cursor:pointer;border:none}button:hover{background:#104f66}button.ghost{background:#fff;color:#146582;border:1px solid #146582}.search{display:flex;gap:10px;flex-wrap:wrap}.search select{min-width:140px}.doc{padding:16px 0;border-bottom:1px solid #edf0f4}.doc a{font-weight:700;color:#155d7d;text-decoration:none;cursor:pointer}.doc a:hover{text-decoration:underline}.meta{color:#697b8b;font-size:13px;margin-top:6px}.notice{background:#fff8e9;border:1px solid #f0d89b;padding:12px;border-radius:9px;color:#79551d;font-size:13px}details{margin-top:20px}summary{cursor:pointer;font-weight:700}.tag{display:inline-block;background:#e6f0f7;color:#146582;border-radius:6px;padding:2px 8px;font-size:12px;margin-right:6px}.tag.warn{background:#fff3d6;color:#79551d}.tag.ok{background:#e2f3e5;color:#1e6b34}h2{font-size:20px;margin:0 0 12px}h3{font-size:16px;margin:18px 0 8px}.check{list-style:none;padding:0}.check li{padding:8px 0 8px 28px;position:relative;border-bottom:1px solid #f0f3f6}.check li:before{content:"☐";position:absolute;left:0;color:#146582}.prov{border-bottom:1px solid #edf0f4;padding:10px 0}.prov b{color:#155d7d}.prov p{margin:6px 0 0;white-space:pre-wrap;font-size:14px}.diff-add{background:#e2f3e5}.diff-rem{background:#fde8e8}.diff-chg{background:#fff3d6}.diff{padding:10px;border-radius:8px;margin:8px 0;font-size:14px}.diff b{display:block;margin-bottom:4px}.diff pre{white-space:pre-wrap;margin:4px 0;font:inherit}.muted{color:#697b8b;font-size:13px}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1}.row button{flex:0 0 auto}#status{font-size:13px;color:#526f85;white-space:pre-wrap}@media(max-width:600px){.stats{flex-direction:column}.hero{padding:22px}.search{flex-direction:column}.search>*{width:100%}}
+.banner{padding:12px 14px;border-radius:10px;margin:12px 0;font-size:14px}
+.banner.expired{background:#fde8e8;border:1px solid #f0b4b4;color:#7a1f1f}
+.banner.upcoming{background:#fff3d6;border:1px solid #f0d89b;color:#79551d}
+.banner.partial{background:#fff3d6;border:1px solid #f0d89b;color:#79551d}
+.banner.unknown{background:#eef2f6;border:1px solid #d5dde5;color:#526f85}
+.banner.ok{background:#e2f3e5;border:1px solid #b5d9bd;color:#1e6b34}
+.tl{display:flex;overflow-x:auto;padding:8px 0;list-style:none;margin:0}
+.tl li{flex:0 0 auto;max-width:230px;padding:8px 12px;border-left:3px solid #146582;background:#f7fafc;margin-right:8px;border-radius:0 8px 8px 0;font-size:13px}
+.tl li b{display:block}.tl li span{color:#697b8b;font-size:12px}
+.rel{border-bottom:1px solid #edf0f4;padding:10px 0;font-size:14px}
+.rel .ev{color:#526f85;font-size:13px;margin-top:4px}
+.rel details{margin-top:6px;font-size:13px}
+mark{background:#ffe58a;padding:0 2px}</style>
 </head><body>
 <header><strong>KeToanAI</strong> <span>Trung tâm thông tin kế toán &amp; thuế</span></header>
 <main>
@@ -14,7 +27,7 @@
 
 <div class="panel"><h2>Hỏi trợ lý KeToanAI</h2>
 <div class="search"><input id="ask" placeholder="Ví dụ: Quy định mới về hóa đơn điện tử ảnh hưởng thế nào đến công ty tôi?"><button onclick="askAI()">Hỏi</button></div>
-<p id="ask-out" class="muted" style="margin-top:10px">Trợ lý AI trả lời kèm trích dẫn đúng văn bản và điều khoản, dựa trên 83 văn bản trong kho. Câu trả lời có dùng hồ sơ doanh nghiệp của bạn bên dưới (nếu đã lưu) để phân biệt trường hợp áp dụng.</p>
+<p id="ask-out" class="muted" style="margin-top:10px">Trợ lý AI trả lời kèm trích dẫn đúng văn bản và điều khoản, dựa trên 100 văn bản trong kho. Câu trả lời có dùng hồ sơ doanh nghiệp của bạn bên dưới (nếu đã lưu) để phân biệt trường hợp áp dụng.</p>
 <div id="ask-answer" style="margin-top:12px"></div><div id="ask-sources" style="margin-top:12px"></div></div>
 
 <div class="panel"><h2>Hồ sơ doanh nghiệp</h2>
@@ -39,9 +52,14 @@
 <div id="results"></div></div>
 
 <div class="panel" id="detail" style="display:none"><h2 id="d-title"></h2><div class="meta" id="d-meta"></div>
+<div id="d-banner"></div><div id="d-orig" style="margin-top:10px"></div>
+<h3>Lịch sử hiệu lực</h3><div id="d-timeline"></div>
 <div id="d-facts"></div><h3>Doanh nghiệp cần làm gì?</h3><p class="muted">Checklist tham khảo theo lĩnh vực — mẫu chung, không phải kết luận pháp lý cho từng doanh nghiệp. Đối chiếu với văn bản gốc trước khi áp dụng.</p><ul class="check" id="d-check"></ul>
 <h3>Văn bản liên quan</h3><div id="d-rel"></div>
-<h3>Điều khoản</h3><div id="d-prov"></div>
+<h3>Điều khoản</h3>
+<div class="search" style="margin-bottom:10px"><select id="d-dieu" onchange="renderProvs()"><option value="">Tất cả các Điều</option></select><input id="d-search" placeholder="Tìm trong văn bản…"><button class="ghost" onclick="renderProvs()">Tìm</button></div>
+<p class="muted" id="d-prov-count"></p><div id="d-prov"></div>
+<div class="row" style="margin-top:10px"><button class="ghost" id="d-more" onclick="moreProvs()" style="display:none">Xem thêm</button></div>
 <div class="row" style="margin-top:16px"><button class="ghost" onclick="openCompare(document.getElementById('detail').dataset.id)">So sánh với văn bản khác</button><button class="ghost" onclick="document.getElementById('detail').style.display='none'">Đóng</button></div></div>
 
 <div class="panel" id="compare" style="display:none"><h2>So sánh quy định cũ — mới</h2>
@@ -119,21 +137,111 @@ async function load(){
  if(cs.options.length<=1){const ch=await j('/api/changes?limit=1');ch.categories.forEach(c=>{const o=document.createElement('option');o.value=c.category;o.textContent=c.category;cs.appendChild(o)})}
  }catch(e){document.getElementById('results').textContent='Không kết nối được API: '+e.message}
 }
+let curProvs=[],provShown=0;
+function provLabel(p){
+ if(p.dieu>0)return 'Điều '+p.dieu+(p.khoan?(' Khoản '+p.khoan):'')+(p.diem?(' Điểm '+p.diem):'');
+ if(p.khoan!=null)return 'Đoạn '+p.khoan;
+ return p.ordinal===1?'Mở đầu':'Đoạn '+p.ordinal;
+}
+function hi(text,q){
+ const t=esc(text);
+ if(!q)return t;
+ const eq=esc(q);
+ return t.split(eq).join('<mark>'+eq+'</mark>');
+}
+function effBanner(doc,rel){
+ const s=doc.effectiveness_status,eff=doc.effective_date,exp=doc.expiry_date;
+ // Trạng thái từ §5 (danh sách 100 văn bản, CSV) chưa được rà soát như §4 —
+ // ghi rõ nguồn để không trình bày dữ liệu thứ cấp như kết luận đã kiểm chứng.
+ const prov=doc.effectiveness_source==='csv-§5'?' <span class="muted">(Trạng thái theo danh sách 100 văn bản, chưa rà soát lại.)</span>':'';
+ if(!s)return '<div class="banner unknown">Chưa có dữ liệu quan hệ hiệu lực trong kho cho văn bản này.</div>';
+ if(s==='hết hiệu lực'){
+  const rep=rel&&rel.replaced_by&&rel.replaced_by[0];
+  return '<div class="banner expired"><b>⚠ Văn bản này đã hết hiệu lực'+(exp?' từ '+exp:'')+'.</b>'+(rep?' Được thay thế bởi '+(rep.in_corpus?`<a onclick="openDetail(${rep.doc_id})" style="cursor:pointer;font-weight:700">${esc(rep.number)}</a>`:esc(rep.number))+(rep.effective_date?' từ '+rep.effective_date:'')+'.':'')+' Không áp dụng các quy định trong văn bản này cho hiện tại.'+prov+'</div>';
+ }
+ if(s==='chưa có hiệu lực')return '<div class="banner upcoming"><b>⏳ Văn bản chưa có hiệu lực</b> — có hiệu lực từ '+(eff||'chưa xác minh')+'. Chưa áp dụng cho hiện tại.'+prov+'</div>';
+ if(s==='còn hiệu lực một phần')return '<div class="banner partial"><b>Văn bản còn hiệu lực một phần.</b> '+(doc.effectiveness_note?esc(doc.effectiveness_note):'')+prov+'</div>';
+ if(s==='chưa xác minh')return '<div class="banner unknown">Trạng thái hiệu lực <b>chưa xác minh</b> trong kho — đối chiếu nguồn chính thức trước khi áp dụng.'+prov+'</div>';
+ return '<div class="banner ok"><b>✓ Văn bản đang có hiệu lực</b>'+(eff?' từ '+eff:'')+'.'+prov+'</div>';
+}
+function relItemHtml(r){
+ const link=r.in_corpus?`<a onclick="openDetail(${r.doc_id})" style="cursor:pointer;font-weight:700">${esc(r.number)}</a>`:`<b>${esc(r.number)}</b>`;
+ const tags=[`<span class="tag">${esc(r.confidence)}</span>`];
+ if(r.needs_verification)tags.push('<span class="tag warn">chưa xác minh</span>');
+ if(!r.in_corpus)tags.push('<span class="tag">ngoài kho</span>');
+ if(r.scope)tags.push('<span class="tag">'+esc(r.scope)+'</span>');
+ return `<div class="rel">${link}${r.title?` — ${esc(r.title)}`:''} ${tags.join(' ')}${r.effective_date?`<div class="meta">Hiệu lực: ${r.effective_date}</div>`:''}<details><summary>Căn cứ</summary><div class="ev">${esc(r.evidence)} <span class="muted">(${esc(r.evidence_source)})</span></div></details></div>`;
+}
+function relGroupHtml(title,items){
+ if(!items||!items.length)return '';
+ return `<h3 style="margin:14px 0 4px">${title} (${items.length})</h3>`+items.map(relItemHtml).join('');
+}
+function renderProvs(){
+ const q=document.getElementById('d-search').value.trim().toLowerCase();
+ const dieu=document.getElementById('d-dieu').value;
+ const list=curProvs.filter(p=>(!dieu||String(p.dieu)===dieu)&&(!q||(p.text||'').toLowerCase().includes(q)));
+ provShown=Math.min(100,list.length);
+ document.getElementById('d-prov-count').textContent=list.length?`Hiển thị ${provShown}/${list.length} điều khoản`+(q?` khớp “${document.getElementById('d-search').value.trim()}”`:''):'Không tìm thấy điều khoản phù hợp.';
+ document.getElementById('d-prov').innerHTML=list.slice(0,provShown).map(p=>`<div class="prov" id="prov-${p.ordinal}"><b>${esc(provLabel(p))}</b><p>${hi(p.text||'',q)}</p></div>`).join('');
+ const more=document.getElementById('d-more');
+ more.style.display=list.length>provShown?'':'none';
+ more.dataset.total=list.length;
+ document.getElementById('d-prov').dataset.list=list.map(p=>p.ordinal).join(',');
+}
+function moreProvs(){
+ const total=+document.getElementById('d-more').dataset.total||0;
+ const q=document.getElementById('d-search').value.trim().toLowerCase();
+ const dieu=document.getElementById('d-dieu').value;
+ const list=curProvs.filter(p=>(!dieu||String(p.dieu)===dieu)&&(!q||(p.text||'').toLowerCase().includes(q)));
+ provShown=Math.min(provShown+100,list.length);
+ document.getElementById('d-prov-count').textContent=`Hiển thị ${provShown}/${list.length} điều khoản`;
+ document.getElementById('d-prov').innerHTML=list.slice(0,provShown).map(p=>`<div class="prov" id="prov-${p.ordinal}"><b>${esc(provLabel(p))}</b><p>${hi(p.text||'',q)}</p></div>`).join('');
+ const more=document.getElementById('d-more');
+ more.style.display=list.length>provShown?'':'none';
+}
 async function openDetail(id){
  const d=await j('/api/documents/'+id);
  const box=document.getElementById('detail');box.style.display='block';box.dataset.id=id;
  document.getElementById('d-title').textContent=(d.number||'Văn bản')+' — '+d.title;
- document.getElementById('d-meta').innerHTML=`${esc(d.category)} · Ban hành: ${fmt(d.issued_date)} · Hiệu lực: ${fmt(d.effective_date)} · ${stTag(d.status)} · <a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">Văn bản gốc</a>`;
+ // Quan hệ + timeline (API mới bước 05) — lấy song song với impact.
+ let rel=null,tl=null;
+ try{rel=await j('/api/documents/'+id+'/relations')}catch(e){rel=null}
+ try{tl=await j('/api/documents/'+id+'/timeline')}catch(e){tl=null}
+ const doc=rel?rel.document:d;
+ const effSt=doc.effectiveness_status;
+ document.getElementById('d-meta').innerHTML=`${esc(d.category)} · Ban hành: ${fmt(d.issued_date)} · Hiệu lực: ${fmt(d.effective_date)}${effSt?` · Trạng thái: <b>${esc(effSt)}</b>`:''}${doc.expiry_date?` · Hết hiệu lực: ${doc.expiry_date}`:''} · ${stTag(d.status)}`;
+ document.getElementById('d-banner').innerHTML=effBanner(doc,rel);
+ let src=(d.source||'').toLowerCase();
+ if(!src)src=(d.source_url||'').includes('vbpl.vn')?'vbpl':(d.source_url||'').includes('luatvietnam.vn')?'luatvietnam':'congbao';
+ const san=(d.number||'').replace(/\//g,'-').replace(/Đ/g,'D').replace(/đ/g,'d').trim();
+ document.getElementById('d-orig').innerHTML=`<a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer"><button>Xem bản gốc</button></a> <span class="muted">Mở tại nguồn chính thức. Bản gốc lưu trong kho (bucket “legal-docs”, riêng tư): <code>originals/${esc(src)}/${esc(san)}/</code> — không mở trực tiếp được từ trình duyệt.</span>`;
+ document.getElementById('d-timeline').innerHTML=tl&&tl.events&&tl.events.length?`<ul class="tl">${tl.events.map(e=>`<li><b>${esc(e.label)}</b><span>${e.date||'chưa rõ ngày'}${e.number&&e.number!==d.number?' · '+esc(e.number):''}</span></li>`).join('')}</ul>`:'<p class="muted">Chưa có dữ liệu lịch sử hiệu lực.</p>';
  try{const im=await j('/api/documents/'+id+'/impact');
  document.getElementById('d-facts').innerHTML='<p>'+im.facts.map(esc).join('<br>')+'</p>';
  document.getElementById('d-check').innerHTML=im.checklist.map(c=>'<li>'+esc(c)+'</li>').join('');
- document.getElementById('d-rel').innerHTML=im.related.length?im.related.map(r=>`<div class="doc"><a onclick="openDetail(${r.id})">${esc(r.number)} — ${esc(r.title)}</a><div class="meta">Hiệu lực: ${fmt(r.effective_date)}</div></div>`).join(''):'<p class="muted">Không có văn bản liên quan.</p>';
+ let relHtml='';
+ if(rel&&rel.relations_available){
+  relHtml=relGroupHtml('Thay thế',rel.replaces)+relGroupHtml('Được thay thế bởi',rel.replaced_by)
+   +relGroupHtml('Sửa đổi',rel.amends)+relGroupHtml('Được sửa đổi bởi',rel.amended_by)
+   +relGroupHtml('Hướng dẫn',rel.guides)+relGroupHtml('Được hướng dẫn bởi',rel.guided_by)
+   +relGroupHtml('Bãi bỏ',rel.repeals)+relGroupHtml('Bị bãi bỏ bởi',rel.repealed_by)
+   +relGroupHtml('Liên quan',rel.related);
+ }
+ if(!relHtml)relHtml='<p class="muted">Chưa có quan hệ hiệu lực trong kho cho văn bản này.</p>';
+ relHtml+='<h3 style="margin:14px 0 4px">Cùng lĩnh vực</h3>'+(im.related.length?im.related.map(r=>`<div class="doc"><a onclick="openDetail(${r.id})">${esc(r.number)} — ${esc(r.title)}</a><div class="meta">Hiệu lực: ${fmt(r.effective_date)}</div></div>`).join(''):'<p class="muted">Không có văn bản liên quan.</p>');
+ document.getElementById('d-rel').innerHTML=relHtml;
  }catch(e){document.getElementById('d-facts').innerHTML='<p class="muted">Chưa tải được phân tích tác động.</p>'}
  try{const pv=await j('/api/documents/'+id+'/provisions');
- document.getElementById('d-prov').innerHTML=pv.length?pv.slice(0,60).map(p=>`<div class="prov"><b>Điều ${p.dieu??''}${p.khoan?'.'+p.khoan:''}${p.diem?') '+p.diem:''}</b><p>${esc(p.text)}</p></div>`).join('')+(pv.length>60?`<p class="muted">Hiển thị 60/${pv.length} điều khoản đầu tiên.</p>`:''):'<p class="muted">Văn bản này chưa tách điều khoản.</p>';
- }catch(e){document.getElementById('d-prov').innerHTML='<p class="muted">Chưa có dữ liệu điều khoản cho văn bản này.</p>'}
+ curProvs=pv;document.getElementById('d-search').value='';
+ const dieus=[...new Set(pv.filter(p=>p.dieu>0).map(p=>p.dieu))].sort((a,b)=>a-b);
+ const sel=document.getElementById('d-dieu');
+ sel.innerHTML='<option value="">Tất cả các Điều</option>'+dieus.map(x=>`<option value="${x}">Điều ${x}</option>`).join('');
+ if(!dieus.length)sel.innerHTML='<option value="">Văn bản không chia theo Điều — dùng ô tìm kiếm</option>';
+ renderProvs();
+ }catch(e){curProvs=[];document.getElementById('d-prov').innerHTML='<p class="muted">Chưa có dữ liệu điều khoản cho văn bản này.</p>'}
  box.scrollIntoView({behavior:'smooth'});
 }
+document.getElementById('d-search')&&document.getElementById('d-search').addEventListener('keydown',e=>{if(e.key==='Enter')renderProvs()});
 async function fillCompareSelects(){
  const docs=await j('/api/documents?limit=500');
  const opts=docs.map(d=>`<option value="${d.id}">${esc(d.number)} — ${esc(d.title.slice(0,60))}</option>`).join('');
@@ -161,7 +269,7 @@ async function askAI(){
  const q=document.getElementById('ask').value.trim();
  const out=document.getElementById('ask-out'),ans=document.getElementById('ask-answer'),src=document.getElementById('ask-sources');
  if(!q){out.textContent='Hãy nhập câu hỏi về kế toán, thuế — ví dụ: chi phí tiếp khách có được trừ khi tính thuế TNDN không?';return}
- out.textContent='Đang tra cứu 83 văn bản…';ans.innerHTML='';src.innerHTML='';
+ out.textContent='Đang tra cứu 100 văn bản…';ans.innerHTML='';src.innerHTML='';
  try{
   const r=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,profile:getProfile()})});
   const d=await r.json();
