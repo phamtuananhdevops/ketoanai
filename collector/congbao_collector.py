@@ -70,6 +70,15 @@ USER_AGENT = "KeToanAI-Research-Collector/0.1 (contact: KeToanAI research MVP)"
 RATE_LIMIT_SECONDS = 1.0
 MAX_RETRIES = 3
 MAX_PDF_BYTES = 50_000_000
+MAX_STORED_TEXT = 1_000_000
+# Trần độ dài toàn văn lưu trong DB (extracted_text). 300k cắt cụt 9 văn bản
+# lớn nhất (99/2025, 71/2024, 24/2024, 126/2020, 80/2021, 200/2014,
+# 133/2016, 195/2012, 156/2013) — điều khoản (provisions) đã đầy đủ vì được
+# tách từ toàn văn trước khi cắt, nhưng tìm kiếm /api/documents?q= trên
+# extracted_text bỏ sót nội dung sau mốc cắt. 1M bao hết kho hiện tại (văn
+# bản dài nhất chưa rõ độ dài thật vì bản lưu đã bị cắt — ước tính <1M theo
+# số điều khoản). Đổi trần chỉ có tác dụng khi chạy --force (sha toàn văn
+# không đổi nên lần chạy thường bỏ qua văn bản "unchanged").
 PAGE_SIZE = 20
 
 # Agency / document-type ids used by /api-searchvanban (from the site's
@@ -908,7 +917,7 @@ def store_document(conn: sqlite3.Connection, meta: dict, text: str,
                extracted_text=?, sha256=?, fetched_at=?, review_status='unverified'
                WHERE id=?""",
             (meta["number"], meta["title"], category, meta["issued_date"],
-             meta["effective_date"], text[:300000], sha, now, row[0]))
+             meta["effective_date"], text[:MAX_STORED_TEXT], sha, now, row[0]))
         conn.execute("DELETE FROM provisions WHERE document_number = ?", (meta["number"],))
         conn.commit()
         return "updated", row[0]
@@ -917,7 +926,7 @@ def store_document(conn: sqlite3.Connection, meta: dict, text: str,
            issued_date, effective_date, extracted_text, sha256, fetched_at,
            review_status) VALUES(?,?,?,?,?,?,?,?,?, 'unverified')""",
         (meta["number"], meta["title"], category, meta["source_url"],
-         meta["issued_date"], meta["effective_date"], text[:300000], sha, now))
+         meta["issued_date"], meta["effective_date"], text[:MAX_STORED_TEXT], sha, now))
     conn.commit()
     return "inserted", cur.lastrowid
 
@@ -1141,7 +1150,7 @@ def apply_manual_corrections(conn: sqlite3.Connection) -> list[str]:
             continue
         conn.execute(
             "UPDATE documents SET extracted_text = ?, sha256 = ? WHERE id = ?",
-            (text[:300000], sha, row[0]))
+            (text[:MAX_STORED_TEXT], sha, row[0]))
         # Keep the dieu=0 masthead row (other docs keep theirs too);
         # replace every real provision with the transcribed ones.
         # (dieu=0 is NOT NULL in SQL — the condition must be dieu > 0.)
@@ -1383,7 +1392,7 @@ def ingest_local_pdfs(conn: sqlite3.Connection, pdf_paths: list[Path],
     whose g7 download is split across several PDFs) are concatenated
     in filename order — which is gazette order for the g7 naming —
     then parsed once with the same parser as the download path
-    (same provision split, same 300k extracted_text cap, same
+    (same provision split, same MAX_STORED_TEXT cap, same
     provisions schema with the ordinal key). Idempotent: the store
     dedupes on source_url + sha256 exactly like the download path.
     Returns one result dict per document plus one per unmatched file.
