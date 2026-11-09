@@ -552,10 +552,7 @@ def extract_pdf_text(pdf_bytes: bytes) -> tuple[str, int, int]:
         if not txt.strip():
             scanned += 1
         parts.append(txt)
-    # PyMuPDF leaves literal NUL bytes in form-field separators; strip
-    # them here so the stored text is clean for Postgres (which rejects
-    # NUL in text columns) and for any downstream consumer.
-    return "\n".join(parts).replace("\x00", ""), pages, scanned
+    return "\n".join(parts), pages, scanned
 
 
 def extract_vbpl_html_text(html: str) -> str:
@@ -610,9 +607,7 @@ def extract_vbpl_html_text(html: str) -> str:
     lines = [ln for ln in lines if ln]
     if lines and lines[0] == "Document Content":
         lines = lines[1:]
-    # Strip NUL bytes (present in some VBPL-rendered content); Postgres
-    # rejects NUL in text columns.
-    return "\n".join(lines).replace("\x00", "")
+    return "\n".join(lines)
 
 
 HEADER_RE = re.compile(r"^\s*\d+\s+CÔNG BÁO/Số\s+\d+\s*\+\s*\d+/Ngày\s+\d+-\d+-\d+\s*$", re.M)
@@ -729,11 +724,17 @@ def parse_provisions(text: str, document_number: str) -> list[dict]:
     if preamble:
         pre = "\n".join(preamble).strip()
         if pre:
-            provisions.insert(0, {
-                "document_number": document_number, "chuong": None,
-                "muc": None, "dieu": 0, "khoan": None, "diem": None,
-                "noi_dung": pre[:200000], "confidence": "medium",
-            })
+            # Split the preamble the same way a Dieu body is split.
+            # VAS standards / guidance circulars (105/2003, 161/2007,
+            # 165/2002, 20/2006, 21/2006) have NO Dieu at all, so without
+            # this their whole text lands in ONE row capped at 200k chars
+            # (161/2007 loses ~13k) and is unsearchable as units. Splitting
+            # on the numbered paragraphs (dieu=0 keeps the masthead
+            # convention) makes each paragraph a searchable provision.
+            # For a short plain preamble _split_dieu_body returns exactly
+            # one row, so normal docs are unaffected.
+            provisions[:0] = _split_dieu_body(
+                document_number, None, None, 0, "", pre)
     return provisions
 
 
@@ -970,6 +971,22 @@ EFFECTIVE_DATE_OVERRIDES = {
     # 01/06/2025" và Điều 12.1 "có hiệu lực thi hành kể từ ngày 01 tháng
     # 6 năm 2025".
     "32/2025/TT-BTC": "2025-06-01",
+}
+
+# Source URL cho --local-pdfs khi hàng CSV của văn bản không có Công báo
+# detail URL. 4 văn bản này không có trong danh mục Công báo (chỉ có file
+# trên VBPL gateway, đã tải bằng trình duyệt 09/11/2026, .doc convert sang
+# PDF bằng LibreOffice) và VBPL cũng không có toàn văn HTML đầy đủ cho
+# chúng (234/2003 chỉ có 1.982 ký tự phần quyết định, 12/2005 chỉ có bản
+# tiếng Anh ngắn, 100/2005 và 15/2006 không có body HTML). Trang chi tiết
+# VBPL là nguồn gốc (provenance) — cùng quy ước với vbpl_html_ingest.py
+# (source_url = URL trang VBPL). File PDF đã convert nằm ở
+# collector/local-pdfs/ trong repo; workflow chạy --local-pdfs trên đó.
+LOCAL_PDF_SOURCE_URLS = {
+    "234/2003/QĐ-BTC": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-234-2003-qd-btc-cua-bo-truong-bo-tai-chinh-ve-viec-ban-hanh-va-cong-bo-sau-06-chuan-muc-ke-toan-viet-nam-dot-3--17841",
+    "12/2005/QĐ-BTC": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-12-2005-qd-btc-ve-viec-ban-hanh-va-cong-bo-sau-06-chuan-muc-ke-toan-viet-nam-dot-4--18466",
+    "100/2005/QĐ-BTC": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-100-2005-qd-btc-ve-viec-ban-hanh-va-cong-bo-bon-04-chuan-muc-ke-toan-viet-nam-dot-5--16846",
+    "15/2006/QĐ-BTC": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-15-2006-qd-btc-ve-viec-ban-hanh-che-do-ke-toan-doanh-nghiep--16280",
 }
 
 MANUAL_TEXTS = {
@@ -1298,8 +1315,13 @@ def ingest_local_pdfs(conn: sqlite3.Connection, pdf_paths: list[Path],
                             "refusing to invent one")
             results.append(res)
             continue
-        if not row["detail_url"]:
+        # Source URL: Công báo detail URL nếu có; nếu không, dùng trang
+        # chi tiết VBPL từ LOCAL_PDF_SOURCE_URLS (văn bản chỉ có trên
+        # VBPL gateway). Không có cả hai thì từ chối lưu.
+        source_url = row["detail_url"] or LOCAL_PDF_SOURCE_URLS.get(number, "")
+        if not source_url:
             res["error"] = ("matched CSV row has no Cong bao detail URL "
+                            "and no LOCAL_PDF_SOURCE_URLS entry "
                             "(source_url) — cannot store")
             results.append(res)
             continue
@@ -1319,7 +1341,7 @@ def ingest_local_pdfs(conn: sqlite3.Connection, pdf_paths: list[Path],
                 total_scanned += scanned
                 full_text += ("\n" if full_text else "") + text
                 if not dry_run:
-                    log_fetch(conn, number, row["detail_url"],
+                    log_fetch(conn, number, source_url,
                               f"local:{p.name}", pages, len(text), "ok")
             res.update(pages=total_pages, chars=len(full_text))
             if total_scanned and total_scanned == total_pages:
@@ -1336,7 +1358,7 @@ def ingest_local_pdfs(conn: sqlite3.Connection, pdf_paths: list[Path],
                 results.append(res)
                 continue
             meta = {"number": number, "title": row["title"],
-                    "source_url": row["detail_url"],
+                    "source_url": source_url,
                     "issued_date": row["issued_date"],
                     "effective_date": row["effective_date"]}
             action, _ = store_document(conn, meta, full_text,
@@ -1355,7 +1377,7 @@ def ingest_local_pdfs(conn: sqlite3.Connection, pdf_paths: list[Path],
             res["error"] = f"{type(exc).__name__}: {exc}"
             try:
                 if not dry_run:
-                    log_fetch(conn, number, row["detail_url"], "", 0, 0,
+                    log_fetch(conn, number, source_url, "", 0, 0,
                               "failed", res["error"])
             except Exception:
                 pass
