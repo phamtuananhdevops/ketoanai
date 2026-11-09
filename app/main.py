@@ -161,7 +161,7 @@ def docs(q:str='',category:str='',status:str='',source:str='',effective_from:str
   if ef_to:
    conds.append('effective_date<=%s');params.append(ef_to)
   where='WHERE '+(' AND '.join(conds)) if conds else ''
-  sql=f'SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,status,source,length(COALESCE(extracted_text,\'\')) AS text_length FROM documents {where} ORDER BY id DESC LIMIT %s OFFSET %s'
+  sql=f'SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,status,source,length(COALESCE(extracted_text,\'\')) AS text_length FROM documents {where} ORDER BY issued_date DESC NULLS LAST, id DESC LIMIT %s OFFSET %s'
   with pg() as c:
    rows=c.execute(sql,params+[limit,offset]).fetchall()
   out=[]
@@ -188,7 +188,7 @@ def docs(q:str='',category:str='',status:str='',source:str='',effective_from:str
   conds.append('effective_date<=?');params.append(ef_to)
  where='WHERE '+(' AND '.join(conds)) if conds else ''
  with conn() as c:
-  rows=c.execute(f'SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,review_status,length(extracted_text) AS text_length FROM documents {where} ORDER BY id DESC LIMIT ? OFFSET ?',params+[limit,offset]).fetchall()
+  rows=c.execute(f'SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,review_status,length(extracted_text) AS text_length FROM documents {where} ORDER BY issued_date DESC, id DESC LIMIT ? OFFSET ?',params+[limit,offset]).fetchall()
  out=[]
  for row in rows:
   d=dict(row);d['status']=REVIEW_TO_STATUS.get(d.get('review_status','unverified'),'collected');d['source']=_source_from_url(d.get('source_url',''));out.append(d)
