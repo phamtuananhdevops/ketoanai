@@ -70,15 +70,16 @@ USER_AGENT = "KeToanAI-Research-Collector/0.1 (contact: KeToanAI research MVP)"
 RATE_LIMIT_SECONDS = 1.0
 MAX_RETRIES = 3
 MAX_PDF_BYTES = 50_000_000
-MAX_STORED_TEXT = 1_000_000
+MAX_STORED_TEXT = 2_000_000
 # Trần độ dài toàn văn lưu trong DB (extracted_text). 300k cắt cụt 9 văn bản
 # lớn nhất (99/2025, 71/2024, 24/2024, 126/2020, 80/2021, 200/2014,
 # 133/2016, 195/2012, 156/2013) — điều khoản (provisions) đã đầy đủ vì được
 # tách từ toàn văn trước khi cắt, nhưng tìm kiếm /api/documents?q= trên
-# extracted_text bỏ sót nội dung sau mốc cắt. 1M bao hết kho hiện tại (văn
-# bản dài nhất chưa rõ độ dài thật vì bản lưu đã bị cắt — ước tính <1M theo
-# số điều khoản). Đổi trần chỉ có tác dụng khi chạy --force (sha toàn văn
-# không đổi nên lần chạy thường bỏ qua văn bản "unchanged").
+# extracted_text bỏ sót nội dung sau mốc cắt. 2M: văn bản dài nhất thực tế
+# 1.443.605 ký tự (99/2025, đo ở run #24) — mức 1M trước đó vẫn cắt cụt 4
+# văn bản (99/2025, 80/2021, 200/2014, 156/2013). Đổi trần chỉ có tác dụng
+# khi chạy --force (sha toàn văn không đổi nên lần chạy thường bỏ qua văn
+# bản "unchanged").
 PAGE_SIZE = 20
 
 # Agency / document-type ids used by /api-searchvanban (from the site's
