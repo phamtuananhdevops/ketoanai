@@ -47,7 +47,10 @@ CREATE TABLE IF NOT EXISTS documents (
     title        TEXT NOT NULL,
     category     TEXT NOT NULL,                       -- e.g. 'Thuế GTGT'
     source       TEXT NOT NULL
-                 CHECK (source IN ('congbao', 'vbpl', 'mof', 'gdt')),
+                 -- 'luatvietnam': third-party mirror, only 04/2007/QH12
+                 -- (no downloadable copy on VBPL/Công báo/quochoi.vn).
+                 -- Stays 'collected', never source_verified.
+                 CHECK (source IN ('congbao', 'vbpl', 'mof', 'gdt', 'luatvietnam')),
     source_url   TEXT NOT NULL UNIQUE,                -- canonical detail-page URL
     issued_date  DATE,
     effective_date DATE,
