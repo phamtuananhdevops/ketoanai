@@ -236,7 +236,12 @@ jobs:
           DATABASE_URL: <redacted>
         run: |
           set -euo pipefail
-          python db/seed_relations.py --database-url "$DATABASE_URL"
+          # KHONG truyen --database-url "$DATABASE_URL": run #21 cho thay
+          # truyen chuoi ket noi qua argv lam psycopg bao loi parse
+          # ('missing "=" after ... in connection info string'), trong khi
+          # buoc migrate doc cung secret tu env va ket noi binh thuong.
+          # Script doc DATABASE_URL tu env (mac dinh cua --database-url).
+          python db/seed_relations.py
 
       - name: Save original PDFs/HTML
         # Re-fetches the original file of every document in the scratch DB
