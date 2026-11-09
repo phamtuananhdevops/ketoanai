@@ -586,6 +586,23 @@ def extract_vbpl_html_text(html: str) -> str:
         if "<!DOCTYPE html>" in decoded:
             candidates.append(decoded)
     if not candidates:
+        # Fallback (VBPL format change, thấy 09/11/2026 ở TT200/TT133):
+        # body về dạng mảnh <html>...<body>...<table> trong RSC chunk chứ
+        # không phải tài liệu <!DOCTYPE html> đầy đủ. Lấy chunk đã decode
+        # dài nhất có chứa thẻ <body> (chunk thân văn bản dài hàng MB, các
+        # chunk khác chỉ vài KB) rồi xử lý như trên.
+        for part in parts[1:]:
+            end = part.find('"])</script>')
+            seg = part[:end] if end != -1 else ""
+            if "body" not in seg:
+                continue
+            try:
+                decoded = json.loads('"' + seg + '"')
+            except json.JSONDecodeError:
+                continue
+            if "<body" in decoded and len(decoded) > 10000:
+                candidates.append(decoded)
+    if not candidates:
         raise ValueError("no VBPL document-body (DOCTYPE) RSC chunk found")
     inner = max(candidates, key=len)
     soup = BeautifulSoup(inner, "html.parser")
@@ -938,6 +955,135 @@ def log_fetch(conn: sqlite3.Connection, number: str, source_url: str,
 
 
 # --------------------------------------------------------------------------
+# Hiệu chỉnh thủ công sau kiểm toán (giai đoạn 2, 09/11/2026)
+# --------------------------------------------------------------------------
+# Những lỗi mà collector tự động không sửa được, vì nguồn chính thức cũng
+# sai (32/2025) hoặc vì PDF là bản scan không có lớp text (204/2025).
+# apply_manual_corrections() áp dụng chúng một cách có ghi chú nguồn gốc
+# (fetch_log status 'corrected'); chạy cuối mỗi lần --all và qua cờ
+# --apply-manual. Hàm này idempotent — chạy lại không đổi gì thêm.
+
+EFFECTIVE_DATE_OVERRIDES = {
+    # Công báo ghi sai metadata của chính nó: header + tab Thuộc tính đều
+    # ghi "Ban hành: 31/05/2025 – Hiệu lực: 01/06/2021" (trước cả ngày ban
+    # hành). VBPL xác nhận 01/06/2025: header "Ngày có hiệu lực:
+    # 01/06/2025" và Điều 12.1 "có hiệu lực thi hành kể từ ngày 01 tháng
+    # 6 năm 2025".
+    "32/2025/TT-BTC": "2025-06-01",
+}
+
+MANUAL_TEXTS = {
+    # Nghị quyết 204/2025/QH15: PDF Công báo (849+850, 01/07/2025) là bản
+    # scan 1 trang, không có lớp text — PyMuPDF chỉ trích được 306 ký tự
+    # (masthead + chữ ký). Toàn văn dưới đây được đọc trực tiếp từ ảnh
+    # trang scan của Công báo và đối chiếu với một lần đọc độc lập khác
+    # của cùng file PDF (nội dung 2 Điều khớp nhau).
+    "204/2025/QH15": {
+        "provenance": (
+            "Manual transcription from the official Cong bao PDF image "
+            "(Cong bao 849+850, 01/07/2025): the PDF is a scan with no "
+            "text layer (PyMuPDF extracts 306 chars: masthead + signature "
+            "only). Cross-checked against an independent reading of the "
+            "same PDF."),
+        "text": (
+            "NGHỊ QUYẾT\n"
+            "Về giảm thuế giá trị gia tăng\n"
+            "\n"
+            "QUỐC HỘI\n"
+            "\n"
+            "Căn cứ Hiến pháp nước Cộng hòa xã hội chủ nghĩa Việt Nam đã được sửa đổi, bổ sung một số điều theo Nghị quyết số 203/2025/QH15;\n"
+            "Căn cứ Luật Tổ chức Quốc hội số 57/2014/QH13 đã được sửa đổi, bổ sung một số điều theo Luật số 65/2020/QH14 và Luật số 62/2025/QH15;\n"
+            "Căn cứ Luật Thuế giá trị gia tăng số 48/2024/QH15;\n"
+            "Căn cứ Luật Ban hành văn bản quy phạm pháp luật số 64/2025/QH15;\n"
+            "\n"
+            "QUYẾT NGHỊ:\n"
+            "\n"
+            "Điều 1. Phạm vi áp dụng\n"
+            "1. Giảm 2% thuế suất thuế giá trị gia tăng, áp dụng đối với các nhóm hàng hóa, dịch vụ quy định tại khoản 3 Điều 9 của Luật Thuế giá trị gia tăng số 48/2024/QH15 (còn 8%), trừ một số nhóm hàng hóa, dịch vụ sau: viễn thông, hoạt động tài chính, ngân hàng, chứng khoán, bảo hiểm, kinh doanh bất động sản, sản phẩm kim loại, sản phẩm khai khoáng (trừ than), sản phẩm hàng hóa và dịch vụ chịu thuế tiêu thụ đặc biệt (trừ xăng).\n"
+            "2. Chính phủ quy định chi tiết khoản 1 Điều này.\n"
+            "\n"
+            "Điều 2. Hiệu lực thi hành\n"
+            "Nghị quyết này có hiệu lực thi hành từ ngày 01 tháng 7 năm 2025 đến hết ngày 31 tháng 12 năm 2026.\n"
+            "\n"
+            "Nghị quyết này được Quốc hội nước Cộng hòa xã hội chủ nghĩa Việt Nam khóa XV, kỳ họp thứ 9 thông qua ngày 17 tháng 6 năm 2025.\n"
+            "CHỦ TỊCH QUỐC HỘI\n"
+            "Trần Thanh Mẫn"
+        ),
+        "provisions": [
+            {
+                "dieu": 1, "khoan": 1, "diem": None,
+                "noi_dung": "Giảm 2% thuế suất thuế giá trị gia tăng, áp dụng đối với các nhóm hàng hóa, dịch vụ quy định tại khoản 3 Điều 9 của Luật Thuế giá trị gia tăng số 48/2024/QH15 (còn 8%), trừ một số nhóm hàng hóa, dịch vụ sau: viễn thông, hoạt động tài chính, ngân hàng, chứng khoán, bảo hiểm, kinh doanh bất động sản, sản phẩm kim loại, sản phẩm khai khoáng (trừ than), sản phẩm hàng hóa và dịch vụ chịu thuế tiêu thụ đặc biệt (trừ xăng).",
+            },
+            {
+                "dieu": 1, "khoan": 2, "diem": None,
+                "noi_dung": "Chính phủ quy định chi tiết khoản 1 Điều này.",
+            },
+            {
+                "dieu": 2, "khoan": None, "diem": None,
+                "noi_dung": "Nghị quyết này có hiệu lực thi hành từ ngày 01 tháng 7 năm 2025 đến hết ngày 31 tháng 12 năm 2026.",
+            },
+        ],
+    },
+}
+
+
+def apply_manual_corrections(conn: sqlite3.Connection) -> list[str]:
+    """Apply EFFECTIVE_DATE_OVERRIDES + MANUAL_TEXTS to the DB.
+
+    Idempotent: a correction already in place is skipped (no duplicate
+    fetch_log rows). Every applied correction is recorded in fetch_log
+    with status 'corrected' and its provenance. Returns log lines.
+    """
+    logs: list[str] = []
+    for number, eff in EFFECTIVE_DATE_OVERRIDES.items():
+        row = conn.execute(
+            "SELECT id, effective_date FROM documents WHERE number = ?",
+            (number,)).fetchone()
+        if not row:
+            logs.append(f"[{number}] override skipped: not in DB")
+            continue
+        if row[1] == eff:
+            logs.append(f"[{number}] effective_date already {eff}")
+            continue
+        conn.execute("UPDATE documents SET effective_date = ? WHERE id = ?",
+                     (eff, row[0]))
+        log_fetch(conn, number, "", None, 0, 0, "corrected",
+                  f"effective_date {row[1]} -> {eff} "
+                  f"(manual override, audit phase 2, 09/11/2026)")
+        logs.append(f"[{number}] effective_date {row[1]} -> {eff}")
+    for number, manual in MANUAL_TEXTS.items():
+        row = conn.execute(
+            "SELECT id, source_url, sha256 FROM documents WHERE number = ?",
+            (number,)).fetchone()
+        if not row:
+            logs.append(f"[{number}] manual text skipped: not in DB")
+            continue
+        text = manual["text"]
+        sha = hashlib.sha256(text.encode()).hexdigest()
+        if row[2] == sha:
+            logs.append(f"[{number}] manual text already applied")
+            continue
+        conn.execute(
+            "UPDATE documents SET extracted_text = ?, sha256 = ? WHERE id = ?",
+            (text[:300000], sha, row[0]))
+        # Keep the dieu=0 masthead row (other docs keep theirs too);
+        # replace every real provision with the transcribed ones.
+        # (dieu=0 is NOT NULL in SQL — the condition must be dieu > 0.)
+        conn.execute(
+            "DELETE FROM provisions WHERE document_number = ? "
+            "AND dieu > 0", (number,))
+        provs = [dict(p, document_number=number, chuong=None, muc=None,
+                      confidence="high") for p in manual["provisions"]]
+        n = store_provisions(conn, provs)
+        log_fetch(conn, number, row[1], None, 0, len(text), "corrected",
+                  manual["provenance"])
+        logs.append(f"[{number}] manual text applied: {len(text)} chars, "
+                    f"{n} provisions")
+    conn.commit()
+    return logs
+
+
+# --------------------------------------------------------------------------
 # Ingestion pipeline
 # --------------------------------------------------------------------------
 def ingest_detail(collector: Collector, conn: sqlite3.Connection,
@@ -1261,6 +1407,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="Discover + parse detail pages only; no PDF downloads, no DB writes")
     parser.add_argument("--force", action="store_true",
                         help="Re-parse and re-store even when the text sha256 is unchanged (parser fixes)")
+    parser.add_argument("--apply-manual", action="store_true",
+                        help="Apply post-audit manual corrections only "
+                             "(effective-date overrides, hand-transcribed "
+                             "texts) to --db, then exit")
     args = parser.parse_args(argv)
 
     collector = Collector(Path(args.db), dry_run=args.dry_run)
@@ -1270,6 +1420,12 @@ def main(argv: list[str] | None = None) -> int:
         # an in-memory DB that is discarded.
         conn = sqlite3.connect(":memory:")
         conn.executescript(SCHEMA)
+
+    if args.apply_manual:
+        for line in apply_manual_corrections(conn):
+            print(line, flush=True)
+        collector.close()
+        return 0
 
     targets = load_targets(Path(args.target_csv))
     jobs: list[tuple[str, str, str, str]] = []  # (number, source_url, category, loai)
@@ -1438,6 +1594,11 @@ def main(argv: list[str] | None = None) -> int:
                      if r["status"] == "ok" else f" error={r.get('error')}"),
                   flush=True)
         results_file.close()
+        # Post-audit manual corrections (effective-date overrides,
+        # hand-transcribed scanned texts) — applied last so a fresh
+        # collection never silently reintroduces a fixed error.
+        for line in apply_manual_corrections(conn):
+            print(line, flush=True)
         # Recompute totals from the DB for the final summary.
         total_docs = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         total_prov = conn.execute("SELECT COUNT(*) FROM provisions").fetchone()[0]
