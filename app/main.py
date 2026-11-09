@@ -46,7 +46,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'luatvietnam' if 'luatvietnam.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.7')
+app=FastAPI(title='KeToanAI',version='0.5.8')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -297,7 +297,12 @@ def _retrieve(question,profile_cats=None,limit=12):
 def _ask_prompt(question,sources,profile):
  ctx=[]
  for i,s in enumerate(sources,1):
-  ref=f"[{i}] {s.get('number')} — Điều {s.get('dieu') or ''}{'.'+str(s['khoan']) if s.get('khoan') else ''}{') '+str(s['diem']) if s.get('diem') else ''} (hiệu lực từ {s.get('effective_date') or 'chưa xác minh'})"
+  # Trích dẫn nguồn viết đầy đủ "Điều X Khoản Y Điểm Z" — dạng rút gọn
+  # "Điều 9.1" trước đây khiến mô hình bắt chước theo trong đáp án.
+  _ref=f"Điều {s.get('dieu') or ''}"
+  if s.get('khoan'): _ref+=f" Khoản {s['khoan']}"
+  if s.get('diem'): _ref+=f" Điểm {s['diem']}"
+  ref=f"[{i}] {s.get('number')} — {_ref} (hiệu lực từ {s.get('effective_date') or 'chưa xác minh'})"
   ctx.append(ref+'\n'+(s.get('text') or '')[:800])
  prof=''
  if profile:
@@ -316,6 +321,7 @@ def _ask_prompt(question,sources,profile):
  'Phân biệt rõ quy định hiện hành với quy định cũ khi ngày hiệu lực khác nhau. '
  'Khi câu hỏi hỏi quy định "hiện tại" (hoặc không ghi rõ thời điểm), lấy đáp án từ văn bản đang hiệu lực và có ngày hiệu lực mới nhất trong các đoạn được cung cấp; chỉ dùng văn bản đã hết hiệu lực khi câu hỏi hỏi rõ về quá khứ hoặc so sánh cũ–mới. '
  'Nếu các đoạn trích có số liệu mâu thuẫn nhau (ví dụ mức giảm trừ cũ và mới), ưu tiên số liệu của văn bản hiệu lực mới nhất và ghi rõ số liệu cũ chỉ còn giá trị tham khảo lịch sử. '
+ 'Câu đầu tiên của đáp án PHẢI nêu số liệu hiện hành (của văn bản đang hiệu lực mới nhất trong các đoạn được cung cấp); chỉ nhắc số liệu cũ ở câu sau, ghi rõ đó là quy định cũ đã hết hiệu lực. '
  'Trả lời ngắn gọn bằng tiếng Việt, có mục "Điều kiện áp dụng" khi cần.'+prof+
  '\n\nCâu hỏi: '+question+'\n\nĐoạn văn bản:\n'+'\n\n'.join(ctx))
 def _call_openai(prompt):
