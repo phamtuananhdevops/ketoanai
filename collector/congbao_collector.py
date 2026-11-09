@@ -987,6 +987,15 @@ LOCAL_PDF_SOURCE_URLS = {
     "12/2005/QĐ-BTC": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-12-2005-qd-btc-ve-viec-ban-hanh-va-cong-bo-sau-06-chuan-muc-ke-toan-viet-nam-dot-4--18466",
     "100/2005/QĐ-BTC": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-100-2005-qd-btc-ve-viec-ban-hanh-va-cong-bo-bon-04-chuan-muc-ke-toan-viet-nam-dot-5--16846",
     "15/2006/QĐ-BTC": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-15-2006-qd-btc-ve-viec-ban-hanh-che-do-ke-toan-doanh-nghiep--16280",
+    # 04/2007/QH12 (Luật TNCN gốc): KHÔNG có file tải về trên VBPL (chỉ có
+    # bản tiếng Anh, trang legacy render trắng) và quochoi.vn tìm 0 kết quả.
+    # Toàn văn lấy từ mirror luatvietnam.vn (trang HTML đầy đủ 35 Điều, lưu
+    # thành PDF). Đây là nguồn thứ cấp — văn bản giữ trạng thái 'collected'
+    # (chưa xác minh), KHÔNG được nâng lên source_verified. CSV cũng ghi
+    # nguồn là mirror (ketoananpha.vn). Văn bản đã hết hiệu lực (bị thay thế
+    # bởi 109/2025 từ 01/07/2026); giá trị chính là đối chiếu lịch sử: biểu
+    # thuế 7 bậc (Điều 22) và mức giảm trừ gốc 4tr/1,6tr (Điều 19).
+    "04/2007/QH12": "https://luatvietnam.vn/thue/luat-thue-thu-nhap-ca-nhan-2007-so-04-2007-qh12-33914-d1.html",
 }
 
 MANUAL_TEXTS = {
