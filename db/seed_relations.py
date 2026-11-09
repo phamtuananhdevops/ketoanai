@@ -174,7 +174,16 @@ def seed_sqlite(db_path):
 def seed_pg(database_url):
     from psycopg import connect
     rel, eff = load_seeds()
-    conn = connect(database_url)
+    # Chuoi ket noi phai doc tu bien moi truong, KHONG truyen qua argv:
+    # run #21 truyen --database-url "$DATABASE_URL" va psycopg bao loi
+    # 'missing "=" after ... in connection info string' (chuoi bi bien
+    # dang khi shell mo rong), trong khi buoc migrate doc cung secret
+    # do tu env va ket noi binh thuong. Strip khoang trang thua + dung
+    # cung kwargs ket noi nhu migrate_sqlite_to_postgres.run_live.
+    database_url = (database_url or "").strip()
+    conn = connect(database_url, connect_timeout=30, keepalives=1,
+                   keepalives_idle=30, keepalives_interval=10,
+                   keepalives_count=5)
     try:
         with conn.cursor() as c:
             c.execute(REL_DDL_PG)
