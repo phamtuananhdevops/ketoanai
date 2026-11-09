@@ -45,7 +45,134 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.4.0')
+app=FastAPI(title='KeToanAI',version='0.5.0')
+# --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
+# Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
+# RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
+# được, kèm trích dẫn đúng số hiệu + Điều/Khoản; không có đoạn nào phù hợp
+# thì nói thẳng là không tìm thấy. Không có AI key thì endpoint vẫn trả về
+# các đoạn văn bản liên quan (status 'no_key') — kho văn bản tự nó đã hữu ích.
+ASK_STOPWORDS={'là','của','và','có','không','khi','cho','với','trong','các','những','một','này','đó','thì','mà','để','theo','về','tại','từ','đến','nếu','như','hay','hoặc','gì','nào','bao','nhiêu','thế','sao','ạ','ơi','nhé','anh','chị','tôi','tao','mày','mình','cho','hỏi','xin','làm','sao','thế','nào','vậy','được','không','có','thể'}
+OPENAI_API_KEY=os.getenv('OPENAI_API_KEY','').strip()
+GEMINI_API_KEY=os.getenv('AI_KEY','').strip() or os.getenv('GEMINI_API_KEY','').strip()
+def _keywords(question):
+ # Tách từ khóa tiếng Việt: chữ thường, bỏ stopword, tối đa 8 từ.
+ toks=re.findall(r'[a-zà-ỹ0-9]+',question.lower())
+ seen=[]
+ for t in toks:
+  if len(t)>=2 and t not in ASK_STOPWORDS and t not in seen:seen.append(t)
+ return seen[:8]
+def _like_pat(kw):
+ return '%'+kw+'%'
+def _retrieve(question,profile_cats=None,limit=8):
+ kws=_keywords(question)
+ if not kws:return [],[]
+ # Cụm 2 từ liên tiếp trong câu hỏi ('tiếp khách', 'thời điểm lập') là tín
+ # hiệu mạnh nhất: cộng điểm lớn khi provision chứa nguyên cụm. Từ càng hiếm
+ # (tần suất thấp trong toàn bộ provisions) càng có trọng số cao — 'thuế'
+ # (9.328 dòng) không được át 'khách' (572 dòng). Điều khoản thật (có số
+ # Điều, ngắn) được cộng điểm so với phụ lục dài không số Điều.
+ bigrams=[' '.join(kws[i:i+2]) for i in range(len(kws)-1)]
+ if USE_PG:
+  with pg() as c:
+   dfs=c.execute('SELECT '+','.join(['SUM(CASE WHEN text ILIKE %s THEN 1 ELSE 0 END)']*(len(kws)+len(bigrams)))+' FROM provisions',[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]).fetchone()
+  dfs=[d or 0 for d in dfs]
+  w=[1/((1+df/100)**0.5) for df in dfs[:len(kws)]]
+  wb=[4/((1+df/10)**0.5) for df in dfs[len(kws):]]
+  def _case(col,weight):return f'(CASE WHEN {col} ILIKE %s THEN {weight:.4f} ELSE 0 END)'
+  score='+'.join([_case('p.text',w[i]) for i in range(len(kws))]+[_case('p.text',wb[i]) for i in range(len(bigrams))]+['(CASE WHEN p.dieu IS NOT NULL THEN 2 ELSE 0 END)','(CASE WHEN length(p.text)<3000 THEN 1 WHEN length(p.text)>20000 THEN -8 ELSE 0 END)'])
+  title='+'.join([_case('d.title',w[i]) for i in range(len(kws)) if len(kws[i])>=4]) or '0'
+  where=' OR '.join(['p.text ILIKE %s']*(len(kws)+len(bigrams)))
+  cat_boost=', (CASE WHEN d.category = ANY(%s) THEN 1 ELSE 0 END) AS catb' if profile_cats else ', 0 AS catb'
+  sql=f'SELECT p.document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text,({score}) AS score,({title}) AS tscore{cat_boost} FROM provisions p JOIN documents d ON d.id=p.document_id WHERE {where} ORDER BY score+tscore*2+catb DESC, d.effective_date DESC NULLS LAST, p.ordinal ASC LIMIT 20'
+  params=[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+[_like_pat(k) for k in kws if len(k)>=4]+[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+([profile_cats] if profile_cats else [])
+  with pg() as c:rows=c.execute(sql,params).fetchall()
+  out=[]
+  for r in rows:
+   d=dict(r);d['text']=(d.get('text') or '')[:1200];d.pop('score',None);d.pop('tscore',None);d.pop('catb',None);out.append(d)
+  return out[:limit],kws
+ # SQLite fallback: LIKE chỉ không phân biệt hoa/thường với ASCII nên thử
+ # thêm biến thể viết hoa chữ cái đầu (vd 'điều'/'Điều'); bảng provisions
+ # của collector dùng document_number + noi_dung (không có document_id/text
+ # như Postgres) nên JOIN theo số hiệu.
+ with conn() as c:
+  dfs=c.execute('SELECT '+','.join(['SUM(CASE WHEN noi_dung LIKE ? OR noi_dung LIKE ? THEN 1 ELSE 0 END)']*(len(kws)+len(bigrams)))+' FROM provisions',sum([[_like_pat(k),_like_pat('%'+k[:1].upper()+k[1:]+'%')] for k in kws+bigrams],[])).fetchone()
+ dfs=[d or 0 for d in dfs]
+ w=[1/((1+df/100)**0.5) for df in dfs[:len(kws)]]
+ wb=[4/((1+df/10)**0.5) for df in dfs[len(kws):]]
+ # Pattern chỉ gồm chữ/số (từ _keywords) + % nên nối trực tiếp vào CASE là
+ # an toàn; tham số hóa chỉ dùng cho WHERE.
+ def _case2(col,pat,weight):
+  p2='%'+pat[1:2].upper()+pat[2:]
+  return f'(CASE WHEN {col} LIKE \'{pat}\' OR {col} LIKE \'{p2}\' THEN {weight:.4f} ELSE 0 END)'
+ score='+'.join([_case2('p.noi_dung',_like_pat(k),w[i]) for i,k in enumerate(kws)]+[_case2('p.noi_dung',_like_pat(b),wb[i]) for i,b in enumerate(bigrams)]+['(CASE WHEN p.dieu IS NOT NULL THEN 2 ELSE 0 END)','(CASE WHEN length(p.noi_dung)<3000 THEN 1 WHEN length(p.noi_dung)>20000 THEN -8 ELSE 0 END)'])
+ title='+'.join([_case2('d.title',_like_pat(k),w[i]) for i,k in enumerate(kws) if len(k)>=4]) or '0'
+ where=' OR '.join(['(p.noi_dung LIKE ? OR p.noi_dung LIKE ?)']*(len(kws)+len(bigrams)))
+ cat_boost=', (CASE WHEN d.category IN (%s) THEN 1 ELSE 0 END) AS catb' % ','.join(['?']*len(profile_cats)) if profile_cats else ', 0 AS catb'
+ sql=f'SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text,({score}) AS score,({title}) AS tscore{cat_boost} FROM provisions p JOIN documents d ON d.number=p.document_number WHERE {where} ORDER BY score+tscore*2+catb DESC, d.effective_date DESC, p.ordinal ASC LIMIT 20'
+ pats2=[]
+ for k in kws+bigrams:pats2+= [_like_pat(k),_like_pat('%'+k[:1].upper()+k[1:]+'%')]
+ params=pats2+((profile_cats or []))
+ with conn() as c:rows=c.execute(sql,params).fetchall()
+ out=[]
+ for r in rows:
+  d=dict(r);d['text']=(d.get('text') or '')[:1200];d.pop('score',None);d.pop('tscore',None);d.pop('catb',None);out.append(d)
+ return out[:limit],kws
+def _ask_prompt(question,sources,profile):
+ ctx=[]
+ for i,s in enumerate(sources,1):
+  ref=f"[{i}] {s.get('number')} — Điều {s.get('dieu') or ''}{'.'+str(s['khoan']) if s.get('khoan') else ''}{') '+str(s['diem']) if s.get('diem') else ''} (hiệu lực từ {s.get('effective_date') or 'chưa xác minh'})"
+  ctx.append(ref+'\n'+(s.get('text') or '')[:800])
+ prof=''
+ if profile:
+  bits=[]
+  if profile.get('business_type'):bits.append('loại hình: '+profile['business_type'])
+  if profile.get('vat_method'):bits.append('GTGT: '+profile['vat_method'])
+  if profile.get('filing_period'):bits.append('kỳ kê khai: '+profile['filing_period'])
+  if profile.get('industry'):bits.append('ngành: '+profile['industry'])
+  if bits:prof='\nNgười hỏi là kế toán của doanh nghiệp ('+', '.join(bits)+'). Trả lời theo đúng hoàn cảnh này khi đoạn văn bản cho phép phân biệt.'
+ return ('Bạn là trợ lý kế toán – thuế Việt Nam. Chỉ trả lời dựa trên các đoạn văn bản pháp luật dưới đây. '
+ 'Mỗi ý trả lời phải kèm trích dẫn dạng [số hiệu văn bản, Điều X Khoản Y]. '
+ 'Nếu các đoạn văn bản không đủ để trả lời, nói thẳng là không tìm thấy căn cứ trong kho văn bản và gợi ý tra cứu thêm, không bịa số hiệu, ngày hiệu lực hay nội dung điều khoản. '
+ 'Phân biệt rõ quy định hiện hành với quy định cũ khi ngày hiệu lực khác nhau. '
+ 'Trả lời ngắn gọn bằng tiếng Việt, có mục "Điều kiện áp dụng" khi cần.'+prof+
+ '\n\nCâu hỏi: '+question+'\n\nĐoạn văn bản:\n'+'\n\n'.join(ctx))
+def _call_openai(prompt):
+ # OpenAI chat completions, model gpt-4o (mặc định đã duyệt cho các site CPA).
+ with httpx.Client(timeout=20,trust_env=False) as client:
+  r=client.post('https://api.openai.com/v1/chat/completions',headers={'Authorization':'Bearer '+OPENAI_API_KEY,'Content-Type':'application/json'},json={'model':'gpt-4o','temperature':0,'max_tokens':800,'messages':[{'role':'system','content':'Bạn là trợ lý kế toán – thuế Việt Nam, chỉ trả lời từ văn bản được cung cấp kèm trích dẫn.'},{'role':'user','content':prompt}]})
+  r.raise_for_status()
+  return r.json()['choices'][0]['message']['content'].strip(),'gpt-4o'
+def _call_gemini(prompt):
+ with httpx.Client(timeout=20,trust_env=False) as client:
+  r=client.post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',headers={'x-goog-api-key':GEMINI_API_KEY,'Content-Type':'application/json'},json={'contents':[{'parts':[{'text':prompt}]}],'generationConfig':{'temperature':0,'maxOutputTokens':800}})
+  r.raise_for_status()
+  return r.json()['candidates'][0]['content']['parts'][0]['text'].strip(),'gemini-2.0-flash'
+class Ask(BaseModel):
+ question:str;profile:dict|None=None
+@app.post('/api/ask')
+def ask(req:Ask):
+ q=(req.question or '').strip()
+ if len(q)<3:raise HTTPException(400,'Câu hỏi quá ngắn')
+ if len(q)>500:raise HTTPException(400,'Câu hỏi tối đa 500 ký tự')
+ profile=req.profile if isinstance(req.profile,dict) else None
+ cats=profile.get('categories') if profile else None
+ if cats and not isinstance(cats,list):cats=None
+ sources,kws=_retrieve(q,cats)
+ if not sources:
+  return {'status':'no_sources','answer':None,'sources':[],'keywords':kws,'message':'Không tìm thấy điều khoản liên quan trong kho 83 văn bản. Thử hỏi ngắn gọn hơn bằng từ khóa trong văn bản (ví dụ: thuế suất GTGT, thời điểm lập hóa đơn).'}
+ prompt=_ask_prompt(q,sources,profile)
+ try:
+  if OPENAI_API_KEY:
+   answer,model=_call_openai(prompt)
+   return {'status':'ok','answer':answer,'sources':sources,'keywords':kws,'model':model}
+  if GEMINI_API_KEY:
+   answer,model=_call_gemini(prompt)
+   return {'status':'ok','answer':answer,'sources':sources,'keywords':kws,'model':model}
+ except Exception as e:
+  # AI lỗi (key sai, hết quota, timeout) -> vẫn trả đoạn văn bản, không 500.
+  return {'status':'ai_error','answer':None,'sources':sources,'keywords':kws,'message':f'Trợ lý AI tạm thời không trả lời được ({e}). Dưới đây là các đoạn văn bản liên quan để bạn tự đối chiếu.'}
+ return {'status':'no_key','answer':None,'sources':sources,'keywords':kws,'message':'Chưa cấu hình AI key nên trợ lý chỉ hiển thị các đoạn văn bản liên quan kèm trích dẫn. Thêm OPENAI_API_KEY vào Vercel để bật trả lời AI.'}
 # --- v0.4.0: định hướng "trợ lý tuân thủ" (09/11/2026) ---
 # Checklist hành động MẪU theo lĩnh vực cho /api/documents/{id}/impact.
 # Đây là checklist tham khảo chung (các bước vận hành thường làm khi có quy định
