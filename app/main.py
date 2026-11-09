@@ -46,7 +46,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'luatvietnam' if 'luatvietnam.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.5')
+app=FastAPI(title='KeToanAI',version='0.5.6')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -278,6 +278,8 @@ def _ask_prompt(question,sources,profile):
  'Chỉ nói \'không tìm thấy căn cứ trong kho văn bản\' khi không có đoạn nào liên quan đến câu hỏi. '
  'Không bịa số hiệu, ngày hiệu lực hay nội dung điều khoản. '
  'Phân biệt rõ quy định hiện hành với quy định cũ khi ngày hiệu lực khác nhau. '
+ 'Khi câu hỏi hỏi quy định "hiện tại" (hoặc không ghi rõ thời điểm), lấy đáp án từ văn bản đang hiệu lực và có ngày hiệu lực mới nhất trong các đoạn được cung cấp; chỉ dùng văn bản đã hết hiệu lực khi câu hỏi hỏi rõ về quá khứ hoặc so sánh cũ–mới. '
+ 'Nếu các đoạn trích có số liệu mâu thuẫn nhau (ví dụ mức giảm trừ cũ và mới), ưu tiên số liệu của văn bản hiệu lực mới nhất và ghi rõ số liệu cũ chỉ còn giá trị tham khảo lịch sử. '
  'Trả lời ngắn gọn bằng tiếng Việt, có mục "Điều kiện áp dụng" khi cần.'+prof+
  '\n\nCâu hỏi: '+question+'\n\nĐoạn văn bản:\n'+'\n\n'.join(ctx))
 def _call_openai(prompt):
@@ -485,9 +487,16 @@ def detail(id:int):
 @app.get('/api/documents/{id}/provisions')
 def provisions(id:int):
  if not USE_PG:
-  # 501, không fake: file SQLite của MVP không có bảng provisions —
-  # provisions nằm ở DB của collector, chỉ có sau khi migrate sang Postgres.
-  raise HTTPException(501,'Provisions chỉ có trên Postgres; bản SQLite fallback không chứa bảng provisions')
+  # Nhánh SQLite: chỉ hoạt động khi DB là DB collector (có bảng
+  # provisions với document_number + noi_dung). DB seed của MVP không có
+  # bảng này -> giữ 501 như trước, không fake dữ liệu.
+  with conn() as c:
+   has=c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provisions'").fetchone()[0]
+   if not has:raise HTTPException(501,'Provisions chỉ có trên Postgres hoặc DB collector (bảng provisions); bản SQLite MVP không chứa bảng provisions')
+   row=c.execute('SELECT number FROM documents WHERE id=?',(id,)).fetchone()
+   if not row:raise HTTPException(404,'Không tìm thấy')
+   rows=c.execute('SELECT id,chuong,muc,dieu,khoan,diem,ordinal,noi_dung AS text,confidence FROM provisions WHERE document_number=? ORDER BY ordinal ASC',(row['number'],)).fetchall()
+  return [dict(r) for r in rows]
  with pg() as c:
   doc=c.execute('SELECT id FROM documents WHERE id=%s',(id,)).fetchone()
   if not doc:raise HTTPException(404,'Không tìm thấy')
@@ -621,6 +630,141 @@ def impact(id:int):
  if nprov is not None:facts.append(f"Gồm {nprov} điều khoản đã tách")
  if chaps:facts.append('Các chương: '+', '.join(f"Chương {ch['chuong']} ({ch['count']} khoản)" for ch in chaps[:8]))
  return {'document':{k:d.get(k) for k in ('id','number','title','category','source_url','issued_date','effective_date','fetched_at','status','review_status','source','text_length')},'effective_known':eff_known,'facts':facts,'provisions_count':nprov,'chapters':chaps,'checklist':CHECKLISTS.get(d.get('category'),CHECKLISTS['default']),'checklist_note':'Checklist tham khảo theo lĩnh vực — mẫu chung, không phải kết luận pháp lý cho từng doanh nghiệp. Đối chiếu với văn bản gốc trước khi áp dụng.','related':rel}
+# --- v0.5.6: quan hệ hiệu lực + timeline (bước 05, theo thiết kế §8 báo cáo giai đoạn 2) ---
+# Dữ liệu: db/relations_seed.json (218 quan hệ) + db/effectiveness_seed.json
+# (100 trạng thái hiệu lực), nạp bằng db/seed_relations.py. Cả hai bảng đều
+# đọc được trên Postgres lẫn SQLite; khi bảng chưa có (chưa seed), API trả
+# nhóm rỗng + relations_available=false chứ không 500 — UI hiển thị
+# "Chưa có dữ liệu quan hệ". Chiều quan hệ chỉ lưu một chiều (mới -> cũ);
+# chiều ngược suy ra bằng truy vấn ngược.
+REL_GROUPS=[
+ ('THAY_THẾ','out','replaces'),('THAY_THẾ','in','replaced_by'),
+ ('SỬA_ĐỔI','out','amends'),('SỬA_ĐỔI','in','amended_by'),
+ ('HƯỚNG_DẪN','out','guides'),('HƯỚNG_DẪN','in','guided_by'),
+ ('BÃI_BỎ','out','repeals'),('BÃI_BỎ','in','repealed_by'),
+ ('LIÊN_QUAN','both','related'),
+]
+def _iso(v):
+ # date/datetime -> 'YYYY-MM-DD'; str -> chính nó ('' -> None); None -> None.
+ if v is None:return None
+ if isinstance(v,(date,datetime)):return v.isoformat()[:10]
+ s=str(v).strip();return s or None
+def _relations_tables_exist():
+ try:
+  if USE_PG:
+   with pg() as c:
+    r=c.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('document_relations','document_effectiveness')").fetchone()
+    return (r['count'] if isinstance(r,dict) else r[0])==2
+  with conn() as c:
+   return c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('document_relations','document_effectiveness')").fetchone()[0]==2
+ except Exception:
+  return False
+def _doc_with_effectiveness(id):
+ # (doc_dict, eff_dict|None); 404 khi không có văn bản.
+ if USE_PG:
+  with pg() as c:
+   row=c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,status,source FROM documents WHERE id=%s',(id,)).fetchone()
+   if not row:raise HTTPException(404,'Không tìm thấy')
+   d=dict(row);d['review_status']=STATUS_TO_REVIEW.get(d.get('status'),'unverified')
+   eff=None
+   if _relations_tables_exist():
+    r=c.execute('SELECT status,expiry_date,note,source FROM document_effectiveness WHERE number=%s',(d['number'],)).fetchone()
+    if r:eff=dict(r)
+  return d,eff
+ with conn() as c:
+  row=c.execute('SELECT * FROM documents WHERE id=?',(id,)).fetchone()
+  if not row:raise HTTPException(404,'Không tìm thấy')
+  d=dict(row);d['status']=REVIEW_TO_STATUS.get(d.get('review_status','unverified'),'collected');d['source']=_source_from_url(d.get('source_url',''))
+  eff=None
+  if _relations_tables_exist():
+   r=c.execute('SELECT status,expiry_date,note,source FROM document_effectiveness WHERE number=?',(d['number'],)).fetchone()
+   if r:eff=dict(r)
+ return d,eff
+def _doc_summary(d,eff):
+ eff_date=_iso(d.get('effective_date'))
+ return {'id':d['id'],'number':d.get('number'),'title':d.get('title'),'category':d.get('category'),'source_url':d.get('source_url'),'issued_date':_iso(d.get('issued_date')),'effective_date':None if eff_date in (None,UNKNOWN_EFFECTIVE) else eff_date,'status':d.get('status'),'source':d.get('source'),'effectiveness_status':eff['status'] if eff else None,'expiry_date':_iso(eff['expiry_date']) if eff else None,'effectiveness_note':eff['note'] if eff else None,'effectiveness_source':eff['source'] if eff else None}
+def _relation_rows(number,direction):
+ # direction 'out': văn bản này -> văn bản khác; 'in': văn bản khác -> văn bản này.
+ # JOIN documents theo number để lấy tiêu đề + ngày hiệu lực của đầu kia;
+ # ngoài kho thì doc_id/title/effective_date = NULL (in_corpus=false).
+ if direction=='out':
+  other,where='r.target_number','r.source_number'
+ else:
+  other,where='r.source_number','r.target_number'
+ if USE_PG:
+  sql=f'SELECT r.relation_type,{other} AS other_number,r.scope,r.evidence,r.evidence_source,r.confidence,r.needs_verification,d.id AS doc_id,d.title,d.effective_date FROM document_relations r LEFT JOIN documents d ON d.number={other} WHERE {where}=%s ORDER BY r.relation_type,{other}'
+  with pg() as c:return [dict(r) for r in c.execute(sql,(number,)).fetchall()]
+ sql=f'SELECT r.relation_type,{other} AS other_number,r.scope,r.evidence,r.evidence_source,r.confidence,r.needs_verification,d.id AS doc_id,d.title,d.effective_date FROM document_relations r LEFT JOIN documents d ON d.number={other} WHERE {where}=? ORDER BY r.relation_type,{other}'
+ with conn() as c:return [dict(r) for r in c.execute(sql,(number,)).fetchall()]
+def _rel_item(r,direction):
+ return {'number':r['other_number'],'title':r.get('title'),'doc_id':r.get('doc_id'),'in_corpus':r.get('doc_id') is not None,'type':r['relation_type'],'direction':direction,'scope':r.get('scope'),'confidence':r.get('confidence'),'evidence':r.get('evidence'),'evidence_source':r.get('evidence_source'),'needs_verification':bool(r.get('needs_verification')),'effective_date':_iso(r.get('effective_date'))}
+@app.get('/api/documents/{id}/relations')
+def relations(id:int):
+ d,eff=_doc_with_effectiveness(id)
+ avail=_relations_tables_exist()
+ groups={name:[] for _,_,name in REL_GROUPS}
+ if avail:
+  num=d['number']
+  out_rows=_relation_rows(num,'out');in_rows=_relation_rows(num,'in')
+  by_dir={('out',t):[r for r in out_rows if r['relation_type']==t] for t in ('THAY_THẾ','SỬA_ĐỔI','HƯỚNG_DẪN','BÃI_BỎ')}
+  by_dir.update({('in',t):[r for r in in_rows if r['relation_type']==t] for t in ('THAY_THẾ','SỬA_ĐỔI','HƯỚNG_DẪN','BÃI_BỎ')})
+  for rtype,direction,name in REL_GROUPS:
+   if name=='related':
+    groups['related']=[_rel_item(r,'out') for r in out_rows if r['relation_type']=='LIÊN_QUAN']+[_rel_item(r,'in') for r in in_rows if r['relation_type']=='LIÊN_QUAN']
+   else:
+    groups[name]=[_rel_item(r,direction) for r in by_dir[(direction,rtype)]]
+ return {'document':_doc_summary(d,eff),'relations_available':avail,**groups}
+def _walk_chain(number,direction,max_depth=10):
+ # Chuỗi thay thế theo chiều direction ('out': văn bản này thay thế ai;
+ # 'in': ai thay thế văn bản này), duyệt theo tầng (BFS) vì một văn bản
+ # có thể thay thế nhiều văn bản cùng lúc (vd 254/2026 thay thế 3 nghị định).
+ out,seen,frontier,depth=[],{number},[number],0
+ while frontier and depth<max_depth:
+  depth+=1;nxt=[]
+  for cur in frontier:
+   for r in _relation_rows(cur,direction):
+    if r['relation_type']!='THAY_THẾ':continue
+    n=r['other_number']
+    if n in seen:continue
+    seen.add(n)
+    out.append({'number':n,'title':r.get('title'),'doc_id':r.get('doc_id'),'in_corpus':r.get('doc_id') is not None,'effective_date':_iso(r.get('effective_date')),'depth':depth})
+    nxt.append(n)
+  frontier=nxt
+ out.sort(key=lambda x:x['effective_date'] or '9999-12-31')
+ return out
+@app.get('/api/documents/{id}/timeline')
+def timeline(id:int):
+ d,eff=_doc_with_effectiveness(id)
+ num=d['number'];doc_id=d['id']
+ events=[]
+ iss=_iso(d.get('issued_date'))
+ if iss:events.append({'date':iss,'kind':'issued','label':'Ban hành','number':num,'doc_id':doc_id})
+ eff_date=_iso(d.get('effective_date'))
+ if eff_date and eff_date!=UNKNOWN_EFFECTIVE:events.append({'date':eff_date,'kind':'effective','label':'Có hiệu lực','number':num,'doc_id':doc_id})
+ if eff and eff.get('expiry_date'):events.append({'date':_iso(eff['expiry_date']),'kind':'expired','label':'Hết hiệu lực','number':num,'doc_id':doc_id})
+ avail=_relations_tables_exist()
+ if avail:
+  # Mốc từ quan hệ vào: ai sửa/thay thế/bãi bỏ/hướng dẫn văn bản này
+  # (ngày = ngày hiệu lực của văn bản kia, nếu có trong kho).
+  for r in _relation_rows(num,'in'):
+   odate=_iso(r.get('effective_date'));n=r['other_number']
+   if r['relation_type']=='SỬA_ĐỔI':events.append({'date':odate,'kind':'amended_by','label':f'Được sửa đổi bởi {n}','number':n,'doc_id':r.get('doc_id')})
+   elif r['relation_type']=='THAY_THẾ':events.append({'date':odate,'kind':'replaced_by','label':f'Được thay thế bởi {n}','number':n,'doc_id':r.get('doc_id')})
+   elif r['relation_type']=='BÃI_BỎ':events.append({'date':odate,'kind':'repealed_by','label':f"Bị bãi bỏ bởi {n}"+(f" ({r['scope']})" if r.get('scope') else ''),'number':n,'doc_id':r.get('doc_id')})
+   elif r['relation_type']=='HƯỚNG_DẪN':events.append({'date':odate,'kind':'guided_by','label':f'Được hướng dẫn bởi {n}','number':n,'doc_id':r.get('doc_id')})
+  # Mốc từ quan hệ ra: văn bản này thay thế/sửa đổi/hướng dẫn ai
+  # (ngày = ngày hiệu lực của chính văn bản này).
+  for r in _relation_rows(num,'out'):
+   n=r['other_number']
+   if r['relation_type']=='THAY_THẾ':events.append({'date':eff_date,'kind':'replaces','label':f'Thay thế {n}','number':n,'doc_id':r.get('doc_id')})
+   elif r['relation_type']=='SỬA_ĐỔI':events.append({'date':eff_date,'kind':'amends','label':f'Sửa đổi {n}','number':n,'doc_id':r.get('doc_id')})
+   elif r['relation_type']=='HƯỚNG_DẪN':events.append({'date':eff_date,'kind':'guides','label':f'Hướng dẫn {n}','number':n,'doc_id':r.get('doc_id')})
+  chain={'predecessors':_walk_chain(num,'out'),'successors':_walk_chain(num,'in')}
+ else:
+  chain={'predecessors':[],'successors':[]}
+ order={'issued':0,'effective':1,'guides':2,'guided_by':3,'amends':4,'amended_by':5,'repealed_by':6,'expired':7,'replaces':8,'replaced_by':9}
+ events.sort(key=lambda e:(e['date'] or '9999-12-31',order.get(e['kind'],99)))
+ return {'document':_doc_summary(d,eff),'events':events,'chain':chain,'relations_available':avail}
 @app.get('/api/stats')
 def stats():
  if USE_PG:
