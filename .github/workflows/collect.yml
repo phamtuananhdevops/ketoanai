@@ -222,6 +222,22 @@ jobs:
           SCRATCH_DB="$RUNNER_TEMP/documents.db"
           python db/migrate_sqlite_to_postgres.py --sqlite "$SCRATCH_DB"
 
+      - name: Seed relations + effectiveness (step 05)
+        # Seeds the 218 effectiveness relations (db/relations_seed.json)
+        # and 100 effectiveness statuses (db/effectiveness_seed.json)
+        # into Postgres for the new /relations + /timeline APIs.
+        # The loader is idempotent (upsert) and creates the
+        # document_relations / document_effectiveness tables itself
+        # (CREATE TABLE IF NOT EXISTS), so no separate schema-apply
+        # step is needed. Runs after migrate so the document ids it
+        # resolves already exist. Without this step the new APIs
+        # return relations_available: false.
+        env:
+          DATABASE_URL: <redacted>
+        run: |
+          set -euo pipefail
+          python db/seed_relations.py --database-url "$DATABASE_URL"
+
       - name: Save original PDFs/HTML
         # Re-fetches the original file of every document in the scratch DB
         # (Công báo PDFs via direct congbaocdn links; VBPL HTML docs as .html)
