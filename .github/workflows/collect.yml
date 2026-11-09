@@ -77,12 +77,13 @@
 #   * collector/congbao_collector.py        (copy of the canonical collector)
 #   * collector/vbpl_html_ingest.py         (16 HTML VBPL docs; runs into
 #                                            the same scratch DB, see workflow)
-#   * collector/local-pdfs/                 (4 converted PDFs for docs with
+#   * collector/local-pdfs/                 (5 converted PDFs for docs with
 #                                            no Công báo listing and no full
 #                                            VBPL HTML: 234/2003, 12/2005,
-#                                            100/2005, 15/2006 — ingested by
-#                                            the --local-pdfs step below;
-#                                            source URLs in LOCAL_PDF_SOURCE_URLS)
+#                                            100/2005, 15/2006, 04/2007 —
+#                                            ingested by the --local-pdfs step
+#                                            below; source URLs in
+#                                            LOCAL_PDF_SOURCE_URLS)
 #   * collector/save_originals.py           (saves original PDFs/HTML)
 #   * danh-sach-100-van-ban/danh-sach-100-van-ban.csv
 #                                            (100-doc target list; the
@@ -152,6 +153,7 @@ jobs:
             collector/local-pdfs/12-2005-QD-BTC.pdf \
             collector/local-pdfs/100-2005-QD-BTC.pdf \
             collector/local-pdfs/15-2006-QD-BTC.pdf \
+            collector/local-pdfs/04-2007-QH12.pdf \
             collector/save_originals.py \
             danh-sach-100-van-ban/danh-sach-100-van-ban.csv \
             db/migrate_sqlite_to_postgres.py \
@@ -194,13 +196,15 @@ jobs:
           python collector/vbpl_html_ingest.py --db "$SCRATCH_DB"
 
       - name: Ingest local VBPL PDFs
-        # The 4 documents with neither a Công báo detail page nor full
-        # VBPL HTML (234/2003, 12/2005, 100/2005, 15/2006) are ingested
-        # from the converted PDFs committed in collector/local-pdfs/
-        # (originals downloaded from VBPL gateway 09/11/2026, .doc ->
-        # PDF via LibreOffice). Source URLs live in LOCAL_PDF_SOURCE_URLS
+        # The 5 documents with neither a Công báo detail page nor full
+        # VBPL HTML (234/2003, 12/2005, 100/2005, 15/2006, 04/2007) are
+        # ingested from the converted PDFs committed in
+        # collector/local-pdfs/ (originals downloaded from VBPL gateway
+        # 09/11/2026, .doc -> PDF via LibreOffice; 04/2007 is a print-to-PDF
+        # of the luatvietnam.vn full-text page — a third-party mirror, kept
+        # at status 'collected'). Source URLs live in LOCAL_PDF_SOURCE_URLS
         # in congbao_collector.py. Without this step a cold run reaches
-        # 95/100; with it, 99/100 (only 04/2007/QH12 still missing).
+        # 95/100; with it, 100/100.
         run: |
           set -euo pipefail
           SCRATCH_DB="$RUNNER_TEMP/documents.db"
