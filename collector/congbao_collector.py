@@ -1053,6 +1053,56 @@ MANUAL_TEXTS = {
 }
 
 
+# Ghi đè TỪNG điều khoản (provision) khi parser làm mất một phần nội dung
+# mà toàn văn đã có trong DB (khác MANUAL_TEXTS ở chỗ chỉ thay 1 hàng
+# provision, không thay cả văn bản). Áp dụng trong
+# apply_manual_corrections(); idempotent — đã đúng thì bỏ qua.
+PROVISION_OVERRIDES = {
+    # Luật 109/2025/QH15 Điều 9 Khoản 2: hàng provision từ PDF Công báo
+    # thiếu cột thuế suất — parser làm mất cột thứ 4 của bảng, chỉ còn
+    # ngưỡng thu nhập, không có các mức 5/10/20/30/35% (hậu quả: /api/ask
+    # không truy xuất được biểu thuế mới, smoke test Q35 trả lời biểu 7
+    # bậc cũ). Toàn văn bảng đã đối chiếu 3 nguồn độc lập, khớp từng ô:
+    # (1) extracted_text của chính văn bản này trong DB (PDF Công báo
+    # chính thức) có đủ 5 hàng kèm thuế suất; (2) bảng HTML trên
+    # luatvietnam.vn (trang toàn văn 109/2025) khớp từng ô; (3) bảng
+    # tóm tắt của Forvis Mazars khớp (bậc 1–5: 5/10/20/30/35%).
+    # VBPL HTML không lấy được: không có URL trang VBPL của 109/2025
+    # trong DB/CSV/workspace, tìm kiếm không ra trang chi tiết vbpl.vn,
+    # link đính kèm Freshdesk của VBPL đã hết hạn ký (403). Override chỉ
+    # bổ sung số bậc + cột thuế suất còn thiếu, giữ nguyên mọi ngưỡng
+    # thu nhập đã có trong provision.
+    "109/2025/QH15": {
+        "provenance": (
+            "Provision override (audit step 04, 09/11/2026): parser lost "
+            "the tax-rate column of the Article 9 table when parsing the "
+            "official Cong bao PDF. Full table verified against (1) this "
+            "document's own extracted_text in the DB (official Cong bao "
+            "PDF, all 5 rows with rates), (2) the HTML table on "
+            "luatvietnam.vn full-text page, (3) Forvis Mazars summary "
+            "table — all three agree cell by cell. VBPL HTML unavailable "
+            "(no vbpl.vn URL in DB/CSV; VBPL Freshdesk attachment link "
+            "expired, HTTP 403)."),
+        "overrides": [
+            {
+                "dieu": 9, "khoan": 2, "diem": None,
+                "noi_dung": (
+                    "2. Biểu thuế luỹ tiến từng phần được quy định như sau:\n"
+                    "Bậc thuế | Phần thu nhập tính thuế/năm (triệu đồng) | "
+                    "Phần thu nhập tính thuế/tháng (triệu đồng) | "
+                    "Thuế suất (%)\n"
+                    "1 | Đến 120 | Đến 10 | 5\n"
+                    "2 | Trên 120 đến 360 | Trên 10 đến 30 | 10\n"
+                    "3 | Trên 360 đến 720 | Trên 30 đến 60 | 20\n"
+                    "4 | Trên 720 đến 1.200 | Trên 60 đến 100 | 30\n"
+                    "5 | Trên 1.200 | Trên 100 | 35"
+                ),
+            },
+        ],
+    },
+}
+
+
 def apply_manual_corrections(conn: sqlite3.Connection) -> list[str]:
     """Apply EFFECTIVE_DATE_OVERRIDES + MANUAL_TEXTS to the DB.
 
@@ -1105,6 +1155,43 @@ def apply_manual_corrections(conn: sqlite3.Connection) -> list[str]:
                   manual["provenance"])
         logs.append(f"[{number}] manual text applied: {len(text)} chars, "
                     f"{n} provisions")
+    for number, entry in PROVISION_OVERRIDES.items():
+        row = conn.execute(
+            "SELECT id, source_url FROM documents WHERE number = ?",
+            (number,)).fetchone()
+        if not row:
+            logs.append(f"[{number}] provision override skipped: not in DB")
+            continue
+        for ov in entry["overrides"]:
+            # diem NULL phải so bằng IS NULL (so sánh = NULL luôn sai).
+            cur = conn.execute(
+                "SELECT noi_dung FROM provisions WHERE document_number = ? "
+                "AND dieu = ? AND khoan = ? AND "
+                "(diem = ? OR (diem IS NULL AND ? IS NULL))",
+                (number, ov["dieu"], ov["khoan"], ov["diem"],
+                 ov["diem"])).fetchone()
+            if not cur:
+                logs.append(f"[{number}] provision override skipped: "
+                            f"no row for dieu={ov['dieu']} "
+                            f"khoan={ov['khoan']} diem={ov['diem']}")
+                continue
+            if cur[0] == ov["noi_dung"]:
+                logs.append(f"[{number}] provision override already applied: "
+                            f"dieu={ov['dieu']} khoan={ov['khoan']}")
+                continue
+            conn.execute(
+                "UPDATE provisions SET noi_dung = ? WHERE "
+                "document_number = ? AND dieu = ? AND khoan = ? AND "
+                "(diem = ? OR (diem IS NULL AND ? IS NULL))",
+                (ov["noi_dung"], number, ov["dieu"], ov["khoan"],
+                 ov["diem"], ov["diem"]))
+            log_fetch(conn, number, row[1], None, 0, len(ov["noi_dung"]),
+                      "corrected",
+                      entry["provenance"] +
+                      f" Provision dieu={ov['dieu']} khoan={ov['khoan']}.")
+            logs.append(f"[{number}] provision override applied: "
+                        f"dieu={ov['dieu']} khoan={ov['khoan']} "
+                        f"({len(cur[0])} -> {len(ov['noi_dung'])} chars)")
     conn.commit()
     return logs
 
