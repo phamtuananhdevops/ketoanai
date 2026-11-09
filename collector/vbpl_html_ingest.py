@@ -71,6 +71,89 @@ TARGETS = [
         "url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-51-2010-nd-cp-quy-dinh-ve-hoa-don-ban-hang-hoa-cung-ung-dich-vu--25242",
         "expected_dieus": None,
     },
+    # Thêm 09/11/2026 (đợt tải VBPL bằng trình duyệt): 4 văn bản còn thiếu
+    # mà file gốc tải về không dùng được (91/2022 + 954/2020 là PDF scan
+    # không lớp text; 105/2003 không có file tải về; 161/2007 tải PDF
+    # không thành công) nhưng VBPL có toàn văn HTML. 91/2022 sửa đổi
+    # 126/2020/NĐ-CP; 954/2020 điều chỉnh mức giảm trừ gia cảnh TNCN.
+    {
+        "number": "105/2003/TT-BTC",
+        "key": "105-2003",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-105-2003-tt-btc-huong-dan-ke-toan-thuc-hien-sau-6-chuan-muc-ke-toan-ban-hanh-theo-quyet-dinh-so-165-2002-qd-btc-ngay-31-12-2002-cua-bo-truong-bo-tai-chinh--24807",
+        "expected_dieus": None,
+    },
+    {
+        "number": "161/2007/TT-BTC",
+        "key": "161-2007",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-161-2007-tt-btc-huong-dan-thuc-hien-muoi-sau-16-chuan-muc-ke-toan-ban-hanh-theo-quyet-dinh-so-149-2001-qd-btc-ngay-31-12-2001-quyet-dinh-165-2002-qd-btc-ngay-31-12-2002-va-quyet-dinh-so-234-2003-qd-btc-ngay-30-12-2003-cua-bo-truong-bo-tai-chinh--83069",
+        "expected_dieus": None,
+    },
+    {
+        "number": "91/2022/NĐ-CP",
+        "key": "91-2022",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-91-2022-nd-cp-sua-doi-bo-sung-mot-so-dieu-cua-nghi-dinh-so-126-2020-nd-cp-ngay-19-thang-10-nam-2020-cua-chinh-phu-quy-dinh-chi-tiet-mot-so-dieu-cua-luat-quan-ly-thue--157326",
+        "expected_dieus": None,
+    },
+    {
+        "number": "954/2020/UBTVQH14",
+        "key": "954-2020",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/nghi-quyet-so-954-2020-ubtvqh14-ve-dieu-chinh-muc-giam-tru-gia-canh-cua-thue-thu-nhap-ca-nhan--ff496840-ab6a-11f1-a59b-956fac755bb4",
+        "expected_dieus": None,
+    },
+    # Thêm 09/11/2026 (đợt tải VBPL bằng trình duyệt, tiếp): 8 văn bản còn
+    # thiếu có toàn văn HTML trên VBPL (đã kiểm tra bằng extract_vbpl_html_text
+    # từ trang chi tiết thật, không đoán URL). 4 văn bản còn lại của đợt này
+    # (234/2003, 12/2005, 100/2005, 15/2006) KHÔNG có HTML đầy đủ nên đi
+    # bằng --local-pdfs với file PDF đã convert (xem LOCAL_PDF_SOURCE_URLS
+    # trong congbao_collector.py).
+    {
+        "number": "149/2001/QĐ-BTC",
+        "key": "149-2001",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-149-2001-qd-btc-ve-viec-ban-hanh-va-cong-bo-bon-4-chuan-muc-ke-toan-viet-nam-dot-1--22028",
+        "expected_dieus": None,
+    },
+    {
+        "number": "165/2002/QĐ-BTC",
+        "key": "165-2002",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/quyet-dinh-so-165-2002-qd-btc-ve-viec-ban-hanh-va-cong-bo-sau-06-chuan-muc-ke-toan-viet-nam-dot-2--21394",
+        "expected_dieus": None,
+    },
+    {
+        "number": "20/2006/TT-BTC",
+        "key": "20-2006",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-20-2006-tt-btc-huong-dan-ke-toan-thuc-hien-sau-06-chuan-muc-ke-toan-ban-hanh-theo-quyet-dinh-so-12-2005-qd-btc-ngay-15-02-2005-cua-bo-truong-bo-tai-chinh--16244",
+        "expected_dieus": None,
+    },
+    {
+        "number": "21/2006/TT-BTC",
+        "key": "21-2006",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-21-2006-tt-btc-huong-dan-ke-toan-thuc-hien-bon-04-chuan-muc-ke-toan-ban-hanh-theo-quyet-dinh-so-100-2005-qd-btc-ngay-28-12-2005-cua-bo-truong-bo-tai-chinh--16247",
+        "expected_dieus": None,
+    },
+    {
+        "number": "14/2008/QH12",
+        "key": "14-2008",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/luat-thue-thu-nhap-doanh-nghiep-so-14-2008-qh12--12807",
+        "expected_dieus": None,
+    },
+    {
+        "number": "123/2012/TT-BTC",
+        "key": "123-2012",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-123-2012-tt-btc-huong-dan-thi-hanh-mot-so-dieu-cua-luat-thue-thu-nhap-doanh-nghiep-so-14-2008-qh12-va-huong-dan-thi-hanh-nghi-dinh-so-124-2008-nd-cp-ngay-11-12-2008-nghi-dinh-so-122-2011-nd-cp-ngay-27-12-2011-cua-chinh-phu-quy-dinh-chi-tiet-thi-hanh-mot-so-dieu-cua-luat-thue-thu-nhap-doanh-nghiep--46367",
+        "expected_dieus": None,
+    },
+    {
+        "number": "26/2012/QH13",
+        "key": "26-2012",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/luat-sua-doi-bo-sung-mot-so-dieu-cua-luat-thue-thu-nhap-ca-nhan-so-26-2012-qh13--28058",
+        "expected_dieus": None,
+    },
+    {
+        "number": "100/2008/NĐ-CP",
+        "key": "100-2008",
+        "url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-100-2008-nd-cp-quy-dinh-chi-tiet-mot-so-dieu-cua-luat-thue-thu-nhap-ca-nhan--24597",
+        "expected_dieus": None,
+    },
 ]
 
 PROVENANCE = ("source: VBPL rendered HTML (vbpl.vn detail page, RSC payload); "
