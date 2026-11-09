@@ -45,7 +45,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.1')
+app=FastAPI(title='KeToanAI',version='0.5.2')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -68,6 +68,8 @@ def _env_first(*names):
  return ''
 MUSE_API_KEY=_env_first('MUSE_API_KEY','MODEL_API_KEY')
 MUSE_MODEL='muse-spark-1.3'
+# Các site CPA dùng tên OpenAI_KEY — chấp nhận cả hai tên cho provider OpenAI.
+OPENAI_API_KEY=OPENAI_API_KEY or _env_first('OpenAI_KEY')
 def _keywords(question):
  # Tách từ khóa tiếng Việt: chữ thường, bỏ stopword, tối đa 8 từ.
  toks=re.findall(r'[a-zà-ỹ0-9]+',question.lower())
@@ -424,7 +426,7 @@ def changes(category:str='',limit:int=Query(10,ge=1,le=50)):
    new_n=c.execute('SELECT COUNT(*) FROM documents WHERE fetched_at>=%s'+(' AND category=%s' if category else ''),([d30]+([category] if category else []))).fetchone()['count']
    up_n=c.execute('SELECT COUNT(*) FROM documents WHERE effective_date>%s AND effective_date<=%s'+cat,([t_iso,d90]+([category] if category else []))).fetchone()['count']
    rev_n=c.execute("SELECT COUNT(*) FROM documents WHERE status='collected'"+cat,([category] if category else [])).fetchone()['count']
-   new_docs=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,status,source FROM documents WHERE fetched_at>=%s'+(' AND category=%s' if category else '')+' ORDER BY fetched_at DESC LIMIT %s',([d30]+([category] if category else [])+[limit])).fetchall()]
+   new_docs=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,status,source FROM documents WHERE fetched_at>=%s'+(' AND category=%s' if category else '')+' ORDER BY issued_date DESC NULLS LAST, id DESC LIMIT %s',([d30]+([category] if category else [])+[limit])).fetchall()]
    upcoming=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,status,source FROM documents WHERE effective_date>%s AND effective_date<=%s'+cat+' ORDER BY effective_date ASC LIMIT %s',([t_iso,d90]+([category] if category else [])+[limit])).fetchall()]
    recent=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,status,source FROM documents WHERE effective_date>=%s AND effective_date<=%s'+cat+' ORDER BY effective_date DESC LIMIT %s',([d180,t_iso]+([category] if category else [])+[limit])).fetchall()]
    cats=[{'category':r['category'],'count':r['n']} for r in c.execute('SELECT category,COUNT(*) AS n FROM documents GROUP BY category ORDER BY n DESC').fetchall()]
@@ -434,7 +436,7 @@ def changes(category:str='',limit:int=Query(10,ge=1,le=50)):
   new_n=c.execute('SELECT COUNT(*) FROM documents WHERE fetched_at>=?'+(' AND category=?' if category else ''),([cut30]+([category] if category else []))).fetchone()[0]
   up_n=c.execute('SELECT COUNT(*) FROM documents WHERE effective_date>? AND effective_date<=?'+qmark,([t_iso,d90]+([category] if category else []))).fetchone()[0]
   rev_n=c.execute("SELECT COUNT(*) FROM documents WHERE review_status='unverified'"+qmark,([category] if category else [])).fetchone()[0]
-  new_docs=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,review_status FROM documents WHERE fetched_at>=?'+(' AND category=?' if category else '')+' ORDER BY fetched_at DESC LIMIT ?',( [cut30]+([category] if category else [])+[limit])).fetchall()]
+  new_docs=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,review_status FROM documents WHERE fetched_at>=?'+(' AND category=?' if category else '')+' ORDER BY issued_date DESC, id DESC LIMIT ?',( [cut30]+([category] if category else [])+[limit])).fetchall()]
   upcoming=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,review_status FROM documents WHERE effective_date>? AND effective_date<=?'+qmark+' ORDER BY effective_date ASC LIMIT ?',([t_iso,d90]+([category] if category else [])+[limit])).fetchall()]
   recent=[_sum(r) for r in c.execute('SELECT id,number,title,category,source_url,issued_date,effective_date,fetched_at,review_status FROM documents WHERE effective_date>=? AND effective_date<=?'+qmark+' ORDER BY effective_date DESC LIMIT ?',([d180,t_iso]+([category] if category else [])+[limit])).fetchall()]
   cats=[{'category':r[0],'count':r[1]} for r in c.execute('SELECT category,COUNT(*) FROM documents GROUP BY category ORDER BY 2 DESC').fetchall()]
