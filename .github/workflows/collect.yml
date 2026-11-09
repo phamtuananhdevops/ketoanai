@@ -233,7 +233,7 @@ jobs:
         # resolves already exist. Without this step the new APIs
         # return relations_available: false.
         env:
-          DATABASE_URL: <redacted>
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
           # KHONG truyen --database-url "$DATABASE_URL": run #21 cho thay
