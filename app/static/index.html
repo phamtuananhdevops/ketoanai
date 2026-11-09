@@ -14,7 +14,15 @@
 
 <div class="panel"><h2>Hỏi trợ lý KeToanAI</h2>
 <div class="search"><input id="ask" placeholder="Ví dụ: Quy định mới về hóa đơn điện tử ảnh hưởng thế nào đến công ty tôi?"><button onclick="askAI()">Hỏi</button></div>
-<p id="ask-out" class="muted" style="margin-top:10px">Trợ lý AI trả lời kèm trích dẫn đúng văn bản và điều khoản — đang được xây dựng trên kho văn bản đã kiểm chứng (AI RAG · sắp có). Trong lúc chờ, bạn dùng tra cứu bên dưới, mọi kết quả đều dẫn về văn bản gốc.</p></div>
+<p id="ask-out" class="muted" style="margin-top:10px">Trợ lý AI trả lời kèm trích dẫn đúng văn bản và điều khoản, dựa trên 83 văn bản trong kho. Câu trả lời có dùng hồ sơ doanh nghiệp của bạn bên dưới (nếu đã lưu) để phân biệt trường hợp áp dụng.</p>
+<div id="ask-answer" style="margin-top:12px"></div><div id="ask-sources" style="margin-top:12px"></div></div>
+
+<div class="panel"><h2>Hồ sơ doanh nghiệp</h2>
+<p class="muted">Lưu trên trình duyệt của bạn (chưa có tài khoản nên chưa đồng bộ). Hồ sơ này lọc cảnh báo theo lĩnh vực của bạn và giúp trợ lý AI trả lời đúng hoàn cảnh doanh nghiệp.</p>
+<div class="search"><select id="p-type"><option value="">Loại hình…</option><option>Doanh nghiệp</option><option>Hộ kinh doanh</option></select><select id="p-industry"><option value="">Ngành nghề…</option><option>Thương mại</option><option>Sản xuất</option><option>Xây dựng</option><option>Dịch vụ</option><option>Khác</option></select><select id="p-vat"><option value="">Phương pháp GTGT…</option><option>Khấu trừ</option><option>Trực tiếp</option></select><select id="p-period"><option value="">Kỳ kê khai…</option><option>Tháng</option><option>Quý</option></select><select id="p-regime"><option value="">Chế độ kế toán…</option><option>TT200/2014/TT-BTC (doanh nghiệp)</option><option>TT133/2016/TT-BTC (doanh nghiệp nhỏ và vừa)</option><option>TT88/2021/TT-BTC (hộ kinh doanh)</option><option>Khác</option></select><select id="p-year"><option value="">Năm tài chính…</option><option>Dương lịch (1/1 – 31/12)</option><option>Khác</option></select></div>
+<h3>Lĩnh vực quan tâm</h3><div id="p-cats" class="row"></div>
+<div class="row" style="margin-top:14px"><button onclick="saveProfile()">Lưu hồ sơ</button><button class="ghost" onclick="clearProfile()">Xóa hồ sơ</button><label class="muted"><input type="checkbox" id="p-only" onchange="loadChanges()"> Chỉ hiện lĩnh vực của tôi</label></div>
+<p class="muted" id="p-summary">Chưa có hồ sơ — đang hiển thị tất cả lĩnh vực.</p></div>
 
 <div class="panel"><h2>Văn bản cần quan tâm</h2>
 <div class="search"><select id="f-cat"><option value="">Tất cả lĩnh vực</option></select><button class="ghost" onclick="loadChanges()">Lọc</button></div>
@@ -50,20 +58,53 @@ const stTag=s=>s==='legal_verified'?'<span class="tag ok">Đã kiểm chứng ph
 const fmt=d=>d||'Chưa xác minh';
 function docRow(d){return `<div class="doc"><a onclick="openDetail(${d.id})">${esc(d.number||'Văn bản')} — ${esc(d.title)}</a><div class="meta">${esc(d.category)} · Ban hành: ${fmt(d.issued_date)} · Hiệu lực: ${fmt(d.effective_date)} · ${stTag(d.status||d.review_status)}</div></div>`}
 async function j(u){const r=await fetch(u);if(!r.ok)throw new Error('Lỗi '+r.status);return r.json()}
+function getProfile(){try{return JSON.parse(localStorage.getItem('ketoanai-profile')||'null')}catch(e){return null}}
+function profileCats(){const p=getProfile();return p&&Array.isArray(p.categories)&&p.categories.length?p.categories:null}
 async function loadChanges(){
  const cat=document.getElementById('f-cat').value;
  const ch=await j('/api/changes?limit=10'+(cat?'&category='+encodeURIComponent(cat):''));
  document.getElementById('c-new').textContent=ch.counts.new_30d;
  document.getElementById('c-up').textContent=ch.counts.upcoming;
  document.getElementById('c-rev').textContent=ch.counts.needs_review;
+ const only=document.getElementById('p-only')&&document.getElementById('p-only').checked;
+ const cats=only?profileCats():null;
+ const filt=arr=>cats?arr.filter(d=>cats.includes(d.category)):arr;
  const put=(id,arr,empty)=>{document.getElementById(id).innerHTML=arr.length?arr.map(docRow).join(''):`<p class="muted">${empty}</p>`};
- put('list-new',ch.new_docs,'Không có văn bản mới trong 30 ngày qua.');
- put('list-recent',ch.recently_effective,'Không có văn bản mới có hiệu lực gần đây.');
- put('list-up',ch.upcoming_effective,'Hiện chưa có văn bản nào sắp có hiệu lực trong 90 ngày tới.');
+ put('list-new',filt(ch.new_docs),'Không có văn bản mới trong 30 ngày qua.');
+ put('list-recent',filt(ch.recently_effective),'Không có văn bản mới có hiệu lực gần đây.');
+ put('list-up',filt(ch.upcoming_effective),'Hiện chưa có văn bản nào sắp có hiệu lực trong 90 ngày tới.');
  const sel=document.getElementById('f-cat');
  if(sel.options.length<=1)ch.categories.forEach(c=>{const o=document.createElement('option');o.value=c.category;o.textContent=`${c.category} (${c.count})`;sel.appendChild(o)});
+ const pc=document.getElementById('p-cats');
+ if(!pc.dataset.done){pc.dataset.done='1';ch.categories.forEach(c=>{const l=document.createElement('label');l.className='muted';l.innerHTML=`<input type="checkbox" value="${esc(c.category)}"> ${esc(c.category)}`;pc.appendChild(l)});renderProfile()}
  if(ch.new_docs.length){const first=ch.new_docs[0];document.getElementById('todo-doc').textContent='Văn bản mới nhất: '+first.number+' — '+first.title;showImpact(first.id)}
 }
+function renderProfile(){
+ const p=getProfile();if(!p)return;
+ const set=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v};
+ set('p-type',p.business_type);set('p-industry',p.industry);set('p-vat',p.vat_method);set('p-period',p.filing_period);set('p-regime',p.accounting_regime);set('p-year',p.fiscal_year);
+ document.querySelectorAll('#p-cats input').forEach(cb=>{cb.checked=(p.categories||[]).includes(cb.value)});
+ profileSummary();
+}
+function profileSummary(){
+ const p=getProfile();const el=document.getElementById('p-summary');
+ if(!p){el.textContent='Chưa có hồ sơ — đang hiển thị tất cả lĩnh vực.';return}
+ const bits=[p.business_type,p.industry,p.vat_method?'GTGT '+p.vat_method:'',p.filing_period?'kê khai '+p.filing_period:'',p.accounting_regime||'',p.fiscal_year||''].filter(Boolean);
+ el.textContent='Hồ sơ: '+bits.join(' · ')+(p.categories&&p.categories.length?' · Quan tâm: '+p.categories.join(', '):'');
+}
+function saveProfile(){
+ const cats=[...document.querySelectorAll('#p-cats input:checked')].map(cb=>cb.value);
+ const p={business_type:document.getElementById('p-type').value,industry:document.getElementById('p-industry').value,vat_method:document.getElementById('p-vat').value,filing_period:document.getElementById('p-period').value,accounting_regime:document.getElementById('p-regime').value,fiscal_year:document.getElementById('p-year').value,categories:cats};
+ localStorage.setItem('ketoanai-profile',JSON.stringify(p));
+ profileSummary();loadChanges();
+ document.getElementById('p-summary').textContent+=' — Đã lưu.';
+}
+function clearProfile(){localStorage.removeItem('ketoanai-profile');document.querySelectorAll('#p-cats input').forEach(cb=>cb.checked=false);['p-type','p-industry','p-vat','p-period','p-regime','p-year'].forEach(id=>document.getElementById(id).value='');profileSummary();loadChanges()}
+document.getElementById('p-type').addEventListener('change',e=>{
+ const boxes=[...document.querySelectorAll('#p-cats input')];
+ if(e.target.value==='Hộ kinh doanh')boxes.forEach(cb=>cb.checked=['Thuế GTGT','Thuế TNCN','Hóa đơn, chứng từ điện tử'].includes(cb.value));
+ else if(e.target.value==='Doanh nghiệp')boxes.forEach(cb=>cb.checked=true);
+});
 async function showImpact(id){
  try{const im=await j('/api/documents/'+id+'/impact');
  document.getElementById('todo-body').innerHTML='<p>'+im.facts.map(esc).join('<br>')+'</p><ul class="check">'+im.checklist.map(c=>'<li>'+esc(c)+'</li>').join('')+'</ul><p class="muted">'+esc(im.checklist_note)+'</p>';
@@ -116,9 +157,21 @@ async function runCompare(){
  return `<div class="diff ${cls}"><b>${lbl} — Điều ${c.dieu??''}${c.khoan?'.'+c.khoan:''}${c.diem?') '+c.diem:''}</b>${c.a_text?'<pre>Trước: '+esc(c.a_text)+'</pre>':''}${c.b_text?'<pre>Sau: '+esc(c.b_text)+'</pre>':''}</div>`}).join('');
  }catch(e){out.innerHTML='<p class="notice">Không so sánh được: '+esc(e.message)+'</p>'}
 }
-function askAI(){
+async function askAI(){
  const q=document.getElementById('ask').value.trim();
- document.getElementById('ask-out').innerHTML=q?('Câu hỏi của bạn: “'+esc(q)+'” — trợ lý AI đang được xây dựng và sẽ trả lời kèm trích dẫn đúng văn bản, điều khoản. Trong lúc chờ, hãy dùng ô tra cứu bên dưới để tìm văn bản liên quan.'):'Hãy nhập câu hỏi về kế toán, thuế — ví dụ: chi phí tiếp khách có được trừ khi tính thuế TNDN không?';
+ const out=document.getElementById('ask-out'),ans=document.getElementById('ask-answer'),src=document.getElementById('ask-sources');
+ if(!q){out.textContent='Hãy nhập câu hỏi về kế toán, thuế — ví dụ: chi phí tiếp khách có được trừ khi tính thuế TNDN không?';return}
+ out.textContent='Đang tra cứu 83 văn bản…';ans.innerHTML='';src.innerHTML='';
+ try{
+  const r=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,profile:getProfile()})});
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.detail||('Lỗi '+r.status));
+  if(d.status==='no_sources'){out.textContent=d.message;return}
+  if(d.status==='ok'){out.textContent='Trả lời từ kho văn bản'+(d.model?' · mô hình '+d.model:'')+'. Đối chiếu văn bản gốc trước khi áp dụng.';ans.innerHTML='<div class="panel" style="background:#f7fafc;margin-top:0"><p style="white-space:pre-wrap;margin:0">'+esc(d.answer)+'</p></div>'}
+  else{out.textContent=d.message||'Trợ lý AI chưa trả lời được — dưới đây là các đoạn văn bản liên quan.'}
+  src.innerHTML='<h3>Căn cứ trong văn bản</h3>'+d.sources.map(s=>`<div class="doc"><a onclick="openDetail(${s.document_id})">${esc(s.number)} — Điều ${s.dieu??'?' }${s.khoan?'.'+s.khoan:''}${s.diem?') '+s.diem:''}</a><div class="meta">${esc(s.category)} · Hiệu lực: ${fmt(s.effective_date)}</div><p style="font-size:14px;white-space:pre-wrap">${esc(s.text)}</p></div>`).join('');
+ }catch(e){out.textContent='Không hỏi được: '+e.message}
 }
+document.getElementById('ask').addEventListener('keydown',e=>{if(e.key==='Enter')askAI()});
 loadChanges();load();
 </script></body></html>
