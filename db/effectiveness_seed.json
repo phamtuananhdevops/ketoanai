@@ -1,0 +1,710 @@
+{
+ "_meta": {
+  "source": "quan-he-hieu-luc-giai-doan-2.md §4 (83 van ban, da ra soat) + §5 (17 van ban thieu, chi co CSV)",
+  "date": "2026-11-09",
+  "note": "Trang thai hieu luc theo bang §4/§5. expiry_date chi ghi khi bao cao ghi ro; khong suy ngay het tu ngay hieu luc cua van ban thay the. Hieu luc 1900-01-01 (placeholder) khong co trong seed — ngay hieu luc lay tu bang documents.",
+  "total": 100
+ },
+ "effectiveness": [
+  {
+   "number": "132/2018/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "133/2016/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": "CSV ghi \"Còn hiệu lực\" nhưng VBPL ghi \"Hết hiệu lực một phần\" — cần đối chiếu chính thức",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "174/2016/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "179/2012/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "195/2012/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-01-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "200/2014/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-01-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "202/2014/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "24/2024/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "45/2013/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "48/2006/QĐ-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2018-01-01",
+   "note": "nội dung DNNVV bị TT133/2016 thay thế từ 01/01/2017",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "53/2016/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-01-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "71/2024/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "75/2015/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-01-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "88/2015/QH13",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "99/2025/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "108/2025/QH15",
+   "status": "chưa có hiệu lực",
+   "expiry_date": null,
+   "note": "hiệu lực từ 01/07/2026; riêng Điều 13 và HĐĐT của hộ kinh doanh tại Điều 26 có hiệu lực từ 01/01/2026",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "119/2018/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2022-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "123/2020/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "125/2020/NĐ-CP",
+   "status": "còn hiệu lực một phần",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: khoản 2 Điều 7, Điều 20, 21, 23, 34... và các mẫu biên bản bị 310/2025 bãi bỏ (Điều 2.2–2.3)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "126/2020/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "174/2025/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "19/2021/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "254/2026/NĐ-CP",
+   "status": "chưa có hiệu lực",
+   "expiry_date": null,
+   "note": "hiệu lực từ 01/07/2026",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "310/2025/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "32/2025/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "38/2019/QH14",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "39/2014/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2022-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "41/2022/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": "chỉ Điều 1 (sửa NĐ 123/2020) được xác nhận hết hiệu lực; phần sửa NĐ 15/2022 chưa kiểm tra",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "51/2010/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2022-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "52/2024/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "70/2025/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "78/2021/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2025-06-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "80/2021/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "91/2026/TT-BTC",
+   "status": "chưa có hiệu lực",
+   "expiry_date": null,
+   "note": "hiệu lực từ 01/07/2026",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "100/2016/NĐ-CP",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "106/2016/QH13",
+   "status": "hết hiệu lực",
+   "expiry_date": "2025-07-01",
+   "note": "ngày hết hiệu lực 2025-07-01 đã qua (theo điều khoản thi hành / kiểm toán §8)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "119/2014/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: Điều 1 bị 80/2021 bãi bỏ (Điều 87.4a)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "12/2015/NĐ-CP",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "ngày hiệu lực mâu thuẫn: CSV 2015-01-01 vs DB 2015-02-12 (audit P1-5); một phần bị bãi bỏ: khoản 12 Điều 5 bị 123/2020 bãi bỏ (Điều 59.4); Điều 6 bãi bỏ một phần các NĐ 87/2010, 26/2009, 113/2011, 218/2013, 65/2013, 209/2013",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "13/2008/QH12",
+   "status": "hết hiệu lực",
+   "expiry_date": "2025-07-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "130/2016/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: Điều 3 bị 80/2021 bãi bỏ (Điều 87.4đ)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "146/2017/NĐ-CP",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "15/2022/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2022-12-31",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "151/2014/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: Điều 14–21 Chương IV bị 80/2021 bãi bỏ (Điều 87.4b)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "173/2016/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "181/2025/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "193/2015/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "204/2025/QH15",
+   "status": "còn hiệu lực",
+   "expiry_date": "2026-12-31",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "209/2013/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2025-07-01",
+   "note": "một phần bị bãi bỏ: Điểm c Khoản 2 Điều 6 bị 12/2015 bãi bỏ (Điều 6.5) — văn bản hết hiệu lực 01/07/2025",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "219/2013/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "26/2015/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: Điều 2 bị 80/2021 bãi bỏ (Điều 87.4c)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "31/2013/QH13",
+   "status": "hết hiệu lực",
+   "expiry_date": "2025-07-01",
+   "note": "ngày hết hiệu lực 2025-07-01 đã qua (theo điều khoản thi hành / kiểm toán §8)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "48/2024/QH15",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": "ngưỡng 200tr cho hộ cá nhân có hiệu lực từ 01/01/2026 theo Điều 18",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "49/2022/NĐ-CP",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "71/2014/QH13",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "100/2021/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "109/2025/QH15",
+   "status": "chưa có hiệu lực",
+   "expiry_date": null,
+   "note": "hiệu lực từ 01/07/2026",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "110/2023/UBTVQH15",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "111/2013/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: Điều 5, 6, 24 và khoản 1, khoản 2, 7, 8 Điều 26 bị 80/2021 bãi bỏ (Điều 87.4n)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "156/2013/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": "2022-01-01",
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "198/2025/QH15",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "253/2026/NĐ-CP",
+   "status": "chưa có hiệu lực",
+   "expiry_date": null,
+   "note": "hiệu lực từ 01/07/2026",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "40/2021/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "65/2013/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": "một phần bị bãi bỏ: Điều 7, 8, 9, 10, 19, 20, 21 và quy định về thu nhập từ kinh doanh tại Điều 12, 13, 14 bị 12/2015 bãi bỏ (Điều 6.4) — văn bản hết hiệu lực 01/07/2026; ngày hết hiệu lực 2026-07-01 đã qua (theo điều khoản thi hành / kiểm toán §8)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "79/2022/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "92/2015/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: chương I, II bị 40/2021 bãi bỏ (Điều 20.6); phần cá nhân kinh doanh bị 40/2021 thay thế",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "107/2023/QH15",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "114/2020/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2020-12-31",
+   "note": "effective_date trong DB là placeholder 1900-01-01; ngày hết hiệu lực 2020-12-31 đã qua (theo điều khoản thi hành / kiểm toán §8)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "116/2020/QH14",
+   "status": "hết hiệu lực",
+   "expiry_date": "2020-12-31",
+   "note": "effective_date trong DB là placeholder 1900-01-01; CSV ghi ngày hiệu lực 2020-08-03; ngày hết hiệu lực 2020-12-31 đã qua (theo điều khoản thi hành / kiểm toán §8)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "124/2008/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "132/2020/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": "ngày hết hiệu lực 2026-07-01 đã qua (theo điều khoản thi hành / kiểm toán §8)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "20/2017/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "20/2025/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": "ngày hết hiệu lực 2026-07-01 đã qua (theo điều khoản thi hành / kiểm toán §8)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "218/2013/NĐ-CP",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": "một phần bị bãi bỏ: Điểm n Khoản 2 Điều 3, Điểm g Khoản 2 Điều 9 bị 12/2015 bãi bỏ (Điều 6.3)",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "236/2025/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "25/2018/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "255/2026/NĐ-CP",
+   "status": "chưa có hiệu lực",
+   "expiry_date": null,
+   "note": "hiệu lực từ 01/07/2026",
+   "source": "phase2-§4"
+  },
+  {
+   "number": "32/2013/QH13",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "41/2017/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "67/2025/QH15",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "68/2020/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "78/2014/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "91/2014/NĐ-CP",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "96/2015/TT-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "phase2-§4"
+  },
+  {
+   "number": "149/2001/QĐ-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "165/2002/QĐ-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "234/2003/QĐ-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "12/2005/QĐ-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "100/2005/QĐ-BTC",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "161/2007/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "20/2006/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "21/2006/TT-BTC",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "105/2003/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "15/2006/QĐ-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "14/2008/QH12",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "123/2012/TT-BTC",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "91/2022/NĐ-CP",
+   "status": "còn hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "04/2007/QH12",
+   "status": "hết hiệu lực",
+   "expiry_date": "2026-07-01",
+   "note": "Hết hiệu lực 01/07/2026 theo 109/2025 Điều 29.3",
+   "source": "csv-§5"
+  },
+  {
+   "number": "26/2012/QH13",
+   "status": "chưa xác minh",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "954/2020/UBTVQH14",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  },
+  {
+   "number": "100/2008/NĐ-CP",
+   "status": "hết hiệu lực",
+   "expiry_date": null,
+   "note": null,
+   "source": "csv-§5"
+  }
+ ]
+}

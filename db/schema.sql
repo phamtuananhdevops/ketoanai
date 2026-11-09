@@ -116,6 +116,63 @@ CREATE TABLE IF NOT EXISTS document_versions (
 );
 
 -- ----------------------------------------------------------------------------
+-- document_relations — quan hệ hiệu lực giữa các văn bản (giai đoạn 2,
+-- 09/11/2026; seed: db/relations_seed.json, loader: db/seed_relations.py)
+-- Chỉ lưu MỘT chiều (văn bản mới -> văn bản cũ); chiều ngược suy ra bằng
+-- truy vấn ngược, không lưu dòng riêng — tránh lệch dữ liệu.
+-- source_number/target_number luôn có (TEXT) kể cả khi văn bản ngoài kho
+-- (49 đích ngoài danh sách 100); *_doc_id là FK, NULL khi ngoài kho.
+-- needs_verification: quan hệ nêu trong §7 báo cáo giai đoạn 2 (vd
+-- 09/2026/QH16 -> 109/2025) — UI gắn nhãn "chưa xác minh".
+-- verified: 1 = đã đối chiếu nguồn chính thức (VBPL/Công báo); mặc định 0.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS document_relations (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    source_number      TEXT NOT NULL,
+    target_number      TEXT NOT NULL,
+    source_doc_id      BIGINT REFERENCES documents(id) ON DELETE CASCADE,
+    target_doc_id      BIGINT REFERENCES documents(id) ON DELETE SET NULL,
+    relation_type      TEXT NOT NULL
+                       CHECK (relation_type IN
+                              ('SỬA_ĐỔI', 'THAY_THẾ', 'BÃI_BỎ', 'HƯỚNG_DẪN', 'LIÊN_QUAN')),
+    scope              TEXT,                            -- NULL = toàn bộ; vd "một phần: Điều 6 Khoản 3 — bãi bỏ Điểm n Khoản 2 Điều 3"
+    evidence           TEXT NOT NULL,                   -- trích đúng câu (CSV / tiêu đề / điều khoản thi hành)
+    evidence_source    TEXT NOT NULL,                   -- CSV:van_ban_lien_quan | DB:title | DB:provision
+    confidence         TEXT NOT NULL DEFAULT 'có thể'
+                       CHECK (confidence IN ('chắc chắn', 'có thể', 'suy luận')),
+    verified           BOOLEAN NOT NULL DEFAULT FALSE,
+    needs_verification BOOLEAN NOT NULL DEFAULT FALSE,
+    note               TEXT,                            -- vd "thiếu trong kho", "ngoài danh sách 100"
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (source_number, target_number, relation_type)
+);
+CREATE INDEX IF NOT EXISTS ix_relations_source ON document_relations (source_number);
+CREATE INDEX IF NOT EXISTS ix_relations_target ON document_relations (target_number);
+CREATE INDEX IF NOT EXISTS ix_relations_type   ON document_relations (relation_type);
+CREATE INDEX IF NOT EXISTS ix_relations_source_doc ON document_relations (source_doc_id);
+CREATE INDEX IF NOT EXISTS ix_relations_target_doc ON document_relations (target_doc_id);
+
+-- ----------------------------------------------------------------------------
+-- document_effectiveness — trạng thái hiệu lực đã rà soát (giai đoạn 2 §4+§5)
+-- Nguồn duy nhất cho trạng thái hiệu lực hiển thị trên UI/API: documents
+-- chỉ có issued_date/effective_date, không có expiry_date hay trạng thái.
+-- 100 dòng (83 đã rà soát §4 + 17 CSV §5); source ghi rõ nguồn từng dòng.
+-- expiry_date chỉ ghi khi báo cáo ghi rõ — KHÔNG suy ngày hết từ ngày
+-- hiệu lực của văn bản thay thế. effective_date vẫn lấy từ documents.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS document_effectiveness (
+    number      TEXT PRIMARY KEY,
+    status      TEXT NOT NULL
+                CHECK (status IN ('còn hiệu lực', 'còn hiệu lực một phần',
+                                  'hết hiệu lực', 'chưa có hiệu lực', 'chưa xác minh')),
+    expiry_date DATE,
+    note        TEXT,
+    source      TEXT NOT NULL,                       -- 'phase2-§4' | 'csv-§5'
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ----------------------------------------------------------------------------
 -- fetch_log — collector run history (copied verbatim from SQLite)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS fetch_log (
@@ -174,4 +231,14 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_documents_updated_at ON documents;
 CREATE TRIGGER trg_documents_updated_at
     BEFORE UPDATE ON documents
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_relations_updated_at ON document_relations;
+CREATE TRIGGER trg_relations_updated_at
+    BEFORE UPDATE ON document_relations
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_effectiveness_updated_at ON document_effectiveness;
+CREATE TRIGGER trg_effectiveness_updated_at
+    BEFORE UPDATE ON document_effectiveness
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
