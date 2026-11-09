@@ -16,7 +16,9 @@ Source (read-only, never written to):
 Mapping rules:
   * documents: upsert by source_url (ON CONFLICT DO UPDATE).
     - source derived from source_url host: congbao.chinhphu.vn -> 'congbao',
-      vbpl.vn -> 'vbpl'. Any other host fails validation (never guessed).
+      vbpl.vn -> 'vbpl', luatvietnam.vn -> 'luatvietnam' (third-party
+      mirror, only 04/2007/QH12 — stays 'collected', never source_verified).
+      Any other host fails validation (never guessed).
     - status: every row -> 'collected', EXCEPT the 5 metadata-verified docs
       (99/2025/TT-BTC, 67/2025/QH15, 108/2025/QH15, 40/2021/TT-BTC,
       109/2025/QH15) -> 'source_verified'.
@@ -76,6 +78,13 @@ SOURCE_VERIFIED_NUMBERS = {
 HOST_TO_SOURCE = {
     "congbao.chinhphu.vn": "congbao",
     "vbpl.vn": "vbpl",
+    # luatvietnam.vn: THIRD-PARTY MIRROR, not an official source. Only
+    # 04/2007/QH12 uses it (no downloadable copy on VBPL/Công báo/
+    # quochoi.vn; full text from the mirror's HTML page, saved as PDF).
+    # The document stays 'collected' (never source_verified) — this entry
+    # only lets validation pass so the doc + its 181 provisions migrate.
+    # Added 09/11/2026 after run #17 failed validation on this host.
+    "luatvietnam.vn": "luatvietnam",
 }
 
 DOC_COLUMNS = (
