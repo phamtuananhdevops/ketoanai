@@ -45,7 +45,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.2')
+app=FastAPI(title='KeToanAI',version='0.5.3')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -79,7 +79,7 @@ def _keywords(question):
  return seen[:8]
 def _like_pat(kw):
  return '%'+kw+'%'
-def _retrieve(question,profile_cats=None,limit=8):
+def _retrieve(question,profile_cats=None,limit=12):
  kws=_keywords(question)
  if not kws:return [],[]
  # Cụm 2 từ liên tiếp trong câu hỏi ('tiếp khách', 'thời điểm lập') là tín
@@ -114,6 +114,25 @@ def _retrieve(question,profile_cats=None,limit=8):
   out=[]
   for r in rows:
    d=dict(r);d['text']=(d.get('text') or '')[:1200];d.pop('score',None);d.pop('tscore',None);d.pop('catb',None);out.append(d)
+  out=out[:limit]
+  # Quy tắc chung của một Điều thường nằm ở Khoản 1, 2 — nhưng chúng hay
+  # viết gọn ('hóa đơn' thay vì 'hóa đơn điện tử') nên khớp từ khóa kém hơn
+  # các trường hợp riêng ở Khoản 4, bị xếp sau (vd Điều 9 NĐ 254/2026 Khoản 1
+  # xếp hạng 18 dù là quy tắc chung). Lấy thêm Khoản 1, 2 ngắn của tối đa
+  # 3 Điều đứng đầu, đặt lên trước để AI có quy tắc chung.
+  seen={(d['number'],d.get('dieu'),d.get('khoan'),d.get('diem')) for d in out}
+  pairs=[]
+  for d in out:
+   k=(d['number'],d.get('dieu'))
+   if d.get('dieu') is not None and k not in pairs:pairs.append(k)
+  extra=[]
+  with pg() as c:
+   for number,dieu in pairs[:3]:
+    for r in c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text FROM provisions p JOIN documents d ON d.id=p.document_id WHERE d.number=%s AND p.dieu=%s AND p.khoan IN (1,2) AND p.diem IS NULL AND length(p.text)<1500 ORDER BY p.khoan',(number,dieu)).fetchall():
+     dd=dict(r);key=(dd['number'],dd.get('dieu'),dd.get('khoan'),dd.get('diem'))
+     if key in seen:continue
+     seen.add(key);dd['text']=(dd.get('text') or '')[:1200];extra.append(dd)
+  out=extra+out
   return out[:limit],kws
  # SQLite fallback: LIKE chỉ không phân biệt hoa/thường với ASCII nên thử
  # thêm biến thể viết hoa chữ cái đầu (vd 'điều'/'Điều'); bảng provisions
@@ -141,6 +160,21 @@ def _retrieve(question,profile_cats=None,limit=8):
  out=[]
  for r in rows:
   d=dict(r);d['text']=(d.get('text') or '')[:1200];d.pop('score',None);d.pop('tscore',None);d.pop('catb',None);out.append(d)
+ out=out[:limit]
+ # Như nhánh Postgres: lấy thêm Khoản 1, 2 ngắn của tối đa 3 Điều đứng đầu.
+ seen={(d['number'],d.get('dieu'),d.get('khoan'),d.get('diem')) for d in out}
+ pairs=[]
+ for d in out:
+  k=(d['number'],d.get('dieu'))
+  if d.get('dieu') is not None and k not in pairs:pairs.append(k)
+ extra=[]
+ with conn() as c:
+  for number,dieu in pairs[:3]:
+   for r in c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text FROM provisions p JOIN documents d ON d.number=p.document_number WHERE d.number=? AND p.dieu=? AND p.khoan IN (1,2) AND p.diem IS NULL AND length(p.noi_dung)<1500 ORDER BY p.khoan',(number,dieu)).fetchall():
+    dd=dict(r);key=(dd['number'],dd.get('dieu'),dd.get('khoan'),dd.get('diem'))
+    if key in seen:continue
+    seen.add(key);dd['text']=(dd.get('text') or '')[:1200];extra.append(dd)
+ out=extra+out
  return out[:limit],kws
 def _ask_prompt(question,sources,profile):
  ctx=[]
@@ -157,7 +191,9 @@ def _ask_prompt(question,sources,profile):
   if bits:prof='\nNgười hỏi là kế toán của doanh nghiệp ('+', '.join(bits)+'). Trả lời theo đúng hoàn cảnh này khi đoạn văn bản cho phép phân biệt.'
  return ('Bạn là trợ lý kế toán – thuế Việt Nam. Chỉ trả lời dựa trên các đoạn văn bản pháp luật dưới đây. '
  'Mỗi ý trả lời phải kèm trích dẫn dạng [số hiệu văn bản, Điều X Khoản Y]. '
- 'Nếu các đoạn văn bản không đủ để trả lời, nói thẳng là không tìm thấy căn cứ trong kho văn bản và gợi ý tra cứu thêm, không bịa số hiệu, ngày hiệu lực hay nội dung điều khoản. '
+ 'Nếu các đoạn văn bản chỉ trả lời được một phần câu hỏi, hãy trả lời phần đó kèm trích dẫn và nêu rõ phần nào chưa có căn cứ. '
+ 'Chỉ nói \'không tìm thấy căn cứ trong kho văn bản\' khi không có đoạn nào liên quan đến câu hỏi. '
+ 'Không bịa số hiệu, ngày hiệu lực hay nội dung điều khoản. '
  'Phân biệt rõ quy định hiện hành với quy định cũ khi ngày hiệu lực khác nhau. '
  'Trả lời ngắn gọn bằng tiếng Việt, có mục "Điều kiện áp dụng" khi cần.'+prof+
  '\n\nCâu hỏi: '+question+'\n\nĐoạn văn bản:\n'+'\n\n'.join(ctx))
