@@ -99,6 +99,12 @@ ALLOWED_HOSTS = {
     "congbaocdn.chinhphu.vn",
     "g7.cdnchinhphu.vn",
     "vbpl.vn",
+    # luatvietnam.vn: third-party mirror, only 04/2007/QH12 (no
+    # downloadable copy on VBPL/Công báo/quochoi.vn). The mirror HTML
+    # page IS the original saved for this document (see the HTML branch
+    # in main(): source 'luatvietnam' is treated like 'vbpl').
+    # Added 09/11/2026 after run #19 failed on this host.
+    "luatvietnam.vn",
 }
 VBPL_DISALLOWED_PREFIXES = ("/api/", "/pages/")
 VBPL_DISALLOWED_EXACT = ("/api", "/pages")
@@ -394,20 +400,31 @@ def main(argv: list[str] | None = None) -> int:
             for doc in docs:
                 number, source_url = doc["number"], doc["source_url"]
                 host = urlparse(source_url).hostname or ""
-                source = "vbpl" if host == "vbpl.vn" else "congbao"
+                # 'luatvietnam' (only 04/2007/QH12): the mirror HTML page
+                # is the original, like the VBPL HTML docs — no PDF/DOC
+                # exists for it anywhere official.
+                source = ("vbpl" if host == "vbpl.vn" else
+                          "luatvietnam" if host == "luatvietnam.vn" else
+                          "congbao")
                 doc_dir = out_dir / source / sanitize_number(number)
                 doc_dir.mkdir(parents=True, exist_ok=True)
                 doc_ok, doc_bytes = True, 0
 
-                if source == "vbpl":
+                if source in ("vbpl", "luatvietnam"):
                     # The HTML detail page IS the original (no PDF exists).
+                    if source == "luatvietnam":
+                        note = ("HTML IS the original — mirror page on "
+                                "luatvietnam.vn; no downloadable copy on "
+                                "VBPL/Công báo/quochoi.vn. Full text also "
+                                "saved as PDF in collector/local-pdfs/.")
+                    else:
+                        note = ("HTML IS the original — no PDF/DOC exists for "
+                                "this document on VBPL. " + doc["note"]
+                                if doc["note"] else
+                                "HTML IS the original — no PDF/DOC exists for "
+                                "this document on VBPL.")
                     local = doc_dir / f"{sanitize_number(number)}.html"
                     rel = local.relative_to(manifest_path.parent).as_posix()
-                    note = ("HTML IS the original — no PDF/DOC exists for "
-                            "this document on VBPL. " + doc["note"]
-                            if doc["note"] else
-                            "HTML IS the original — no PDF/DOC exists for "
-                            "this document on VBPL.")
                     if (not args.force and local.exists()
                             and prev_manifest.get(rel) == sha256_file(local)):
                         sha, size = prev_manifest[rel], local.stat().st_size
