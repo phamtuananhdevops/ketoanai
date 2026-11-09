@@ -45,7 +45,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.0')
+app=FastAPI(title='KeToanAI',version='0.5.1')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -55,6 +55,19 @@ app=FastAPI(title='KeToanAI',version='0.5.0')
 ASK_STOPWORDS={'là','của','và','có','không','khi','cho','với','trong','các','những','một','này','đó','thì','mà','để','theo','về','tại','từ','đến','nếu','như','hay','hoặc','gì','nào','bao','nhiêu','thế','sao','ạ','ơi','nhé','anh','chị','tôi','tao','mày','mình','cho','hỏi','xin','làm','sao','thế','nào','vậy','được','không','có','thể'}
 OPENAI_API_KEY=os.getenv('OPENAI_API_KEY','').strip()
 GEMINI_API_KEY=os.getenv('AI_KEY','').strip() or os.getenv('GEMINI_API_KEY','').strip()
+# --- v0.5.1: Muse làm AI chính (Andy, 09/11) ---
+# Meta Model API (dev.meta.ai): OpenAI-compatible, base https://api.meta.ai/v1,
+# model muse-spark-1.3 (phiên bản frontier hiện tại; ví dụ của Meta dùng
+# muse-spark-1.1). Key lấy tại dev.meta.ai, đặt vào Vercel với tên MUSE_API_KEY
+# (chấp nhận cả MODEL_API_KEY — tên gốc của Meta). Thứ tự provider:
+# Muse -> OpenAI (gpt-4o) -> Gemini; provider nào lỗi thì thử tiếp provider sau.
+def _env_first(*names):
+ for n in names:
+  v=os.getenv(n,'').strip()
+  if v:return v
+ return ''
+MUSE_API_KEY=_env_first('MUSE_API_KEY','MODEL_API_KEY')
+MUSE_MODEL='muse-spark-1.3'
 def _keywords(question):
  # Tách từ khóa tiếng Việt: chữ thường, bỏ stopword, tối đa 8 từ.
  toks=re.findall(r'[a-zà-ỹ0-9]+',question.lower())
@@ -152,6 +165,12 @@ def _call_openai(prompt):
   r=client.post('https://api.openai.com/v1/chat/completions',headers={'Authorization':'Bearer '+OPENAI_API_KEY,'Content-Type':'application/json'},json={'model':'gpt-4o','temperature':0,'max_tokens':800,'messages':[{'role':'system','content':'Bạn là trợ lý kế toán – thuế Việt Nam, chỉ trả lời từ văn bản được cung cấp kèm trích dẫn.'},{'role':'user','content':prompt}]})
   r.raise_for_status()
   return r.json()['choices'][0]['message']['content'].strip(),'gpt-4o'
+def _call_muse(prompt):
+ # Muse qua Meta Model API: OpenAI-compatible chat completions.
+ with httpx.Client(timeout=20,trust_env=False) as client:
+  r=client.post('https://api.meta.ai/v1/chat/completions',headers={'Authorization':'Bearer '+MUSE_API_KEY,'Content-Type':'application/json'},json={'model':MUSE_MODEL,'temperature':0,'max_tokens':800,'messages':[{'role':'system','content':'Bạn là trợ lý kế toán – thuế Việt Nam, chỉ trả lời từ văn bản được cung cấp kèm trích dẫn.'},{'role':'user','content':prompt}]})
+  r.raise_for_status()
+  return r.json()['choices'][0]['message']['content'].strip(),MUSE_MODEL
 def _call_gemini(prompt):
  with httpx.Client(timeout=20,trust_env=False) as client:
   r=client.post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',headers={'x-goog-api-key':GEMINI_API_KEY,'Content-Type':'application/json'},json={'contents':[{'parts':[{'text':prompt}]}],'generationConfig':{'temperature':0,'maxOutputTokens':800}})
@@ -171,17 +190,20 @@ def ask(req:Ask):
  if not sources:
   return {'status':'no_sources','answer':None,'sources':[],'keywords':kws,'message':'Không tìm thấy điều khoản liên quan trong kho 83 văn bản. Thử hỏi ngắn gọn hơn bằng từ khóa trong văn bản (ví dụ: thuế suất GTGT, thời điểm lập hóa đơn).'}
  prompt=_ask_prompt(q,sources,profile)
- try:
-  if OPENAI_API_KEY:
-   answer,model=_call_openai(prompt)
+ # Chuỗi provider: Muse -> OpenAI -> Gemini. Provider nào có key nhưng lỗi
+ # (key sai, hết quota, chặn theo quốc gia, timeout) thì thử tiếp provider
+ # sau; chỉ khi không có key nào mới trả no_key.
+ last_err=None
+ for key,fn in ((MUSE_API_KEY,_call_muse),(OPENAI_API_KEY,_call_openai),(GEMINI_API_KEY,_call_gemini)):
+  if not key:continue
+  try:
+   answer,model=fn(prompt)
    return {'status':'ok','answer':answer,'sources':sources,'keywords':kws,'model':model}
-  if GEMINI_API_KEY:
-   answer,model=_call_gemini(prompt)
-   return {'status':'ok','answer':answer,'sources':sources,'keywords':kws,'model':model}
- except Exception as e:
+  except Exception as e:last_err=e
+ if last_err is not None:
   # AI lỗi (key sai, hết quota, timeout) -> vẫn trả đoạn văn bản, không 500.
-  return {'status':'ai_error','answer':None,'sources':sources,'keywords':kws,'message':f'Trợ lý AI tạm thời không trả lời được ({e}). Dưới đây là các đoạn văn bản liên quan để bạn tự đối chiếu.'}
- return {'status':'no_key','answer':None,'sources':sources,'keywords':kws,'message':'Chưa cấu hình AI key nên trợ lý chỉ hiển thị các đoạn văn bản liên quan kèm trích dẫn. Thêm OPENAI_API_KEY vào Vercel để bật trả lời AI.'}
+  return {'status':'ai_error','answer':None,'sources':sources,'keywords':kws,'message':f'Trợ lý AI tạm thời không trả lời được ({last_err}). Dưới đây là các đoạn văn bản liên quan để bạn tự đối chiếu.'}
+ return {'status':'no_key','answer':None,'sources':sources,'keywords':kws,'message':'Chưa cấu hình AI key nên trợ lý chỉ hiển thị các đoạn văn bản liên quan kèm trích dẫn. Thêm MUSE_API_KEY (lấy tại dev.meta.ai) vào Vercel để bật trả lời AI bằng Muse.'}
 # --- v0.4.0: định hướng "trợ lý tuân thủ" (09/11/2026) ---
 # Checklist hành động MẪU theo lĩnh vực cho /api/documents/{id}/impact.
 # Đây là checklist tham khảo chung (các bước vận hành thường làm khi có quy định
