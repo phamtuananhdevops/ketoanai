@@ -89,7 +89,11 @@ def _retrieve(question,profile_cats=None,limit=8):
   title='+'.join([_case('d.title',w[i]) for i in range(len(kws)) if len(kws[i])>=4]) or '0'
   where=' OR '.join(['p.text ILIKE %s']*(len(kws)+len(bigrams)))
   cat_boost=', (CASE WHEN d.category = ANY(%s) THEN 1 ELSE 0 END) AS catb' if profile_cats else ', 0 AS catb'
-  sql=f'SELECT p.document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text,({score}) AS score,({title}) AS tscore{cat_boost} FROM provisions p JOIN documents d ON d.id=p.document_id WHERE {where} ORDER BY score+tscore*2+catb DESC, d.effective_date DESC NULLS LAST, p.ordinal ASC LIMIT 20'
+  # ORDER BY không được tham chiếu alias score/tscore/catb của chính SELECT
+  # đó trên Postgres (lỗi 'column score does not exist' trên live) — bọc
+  # truy vấn trong subquery để score/tscore/catb thành cột thật rồi mới sắp
+  # xếp ở truy vấn ngoài. Tham số không đổi (chỉ có trong subquery).
+  sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT p.document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text,({score}) AS score,({title}) AS tscore{cat_boost},p.ordinal AS ord FROM provisions p JOIN documents d ON d.id=p.document_id WHERE {where}) s ORDER BY score+tscore*2+catb DESC, effective_date DESC NULLS LAST, ord ASC LIMIT 20'
   params=[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+[_like_pat(k) for k in kws if len(k)>=4]+[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+([profile_cats] if profile_cats else [])
   with pg() as c:rows=c.execute(sql,params).fetchall()
   out=[]
@@ -114,7 +118,7 @@ def _retrieve(question,profile_cats=None,limit=8):
  title='+'.join([_case2('d.title',_like_pat(k),w[i]) for i,k in enumerate(kws) if len(k)>=4]) or '0'
  where=' OR '.join(['(p.noi_dung LIKE ? OR p.noi_dung LIKE ?)']*(len(kws)+len(bigrams)))
  cat_boost=', (CASE WHEN d.category IN (%s) THEN 1 ELSE 0 END) AS catb' % ','.join(['?']*len(profile_cats)) if profile_cats else ', 0 AS catb'
- sql=f'SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text,({score}) AS score,({title}) AS tscore{cat_boost} FROM provisions p JOIN documents d ON d.number=p.document_number WHERE {where} ORDER BY score+tscore*2+catb DESC, d.effective_date DESC, p.ordinal ASC LIMIT 20'
+ sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text,({score}) AS score,({title}) AS tscore{cat_boost},p.ordinal AS ord FROM provisions p JOIN documents d ON d.number=p.document_number WHERE {where}) s ORDER BY score+tscore*2+catb DESC, effective_date DESC, ord ASC LIMIT 20'
  pats2=[]
  for k in kws+bigrams:pats2+= [_like_pat(k),_like_pat('%'+k[:1].upper()+k[1:]+'%')]
  params=pats2+((profile_cats or []))
