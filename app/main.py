@@ -46,7 +46,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'luatvietnam' if 'luatvietnam.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.6')
+app=FastAPI(title='KeToanAI',version='0.5.7')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -90,11 +90,16 @@ def _like_pat(kw):
 # bản cũ khi từ khóa khớp mạnh. Số hiệu hết hiệu lực được nhúng trực tiếp
 # vào SQL dưới dạng literal (hằng số nội bộ từ báo cáo, không phải dữ liệu
 # người dùng) nên thứ tự tham số của truy vấn không đổi.
-# EXPIRED_NUMBERS: 28 văn bản hết hiệu lực theo bảng trạng thái §4 của báo
-# cáo quan hệ hiệu lực giai đoạn 2 (09/11/2026). 17 văn bản bổ sung sau
-# (VBPL-16 + 04/2007) không có trong bảng đó nên không bị trừ điểm — trạng
-# thái của chúng chưa được rà soát, không trừ điểm trên dữ liệu chưa xác minh.
-EXPIRED_NUMBERS=frozenset({'195/2012/TT-BTC','200/2014/TT-BTC','48/2006/QĐ-BTC','53/2016/TT-BTC','75/2015/TT-BTC','119/2018/NĐ-CP','123/2020/NĐ-CP','32/2025/TT-BTC','38/2019/QH14','39/2014/TT-BTC','41/2022/NĐ-CP','51/2010/NĐ-CP','70/2025/NĐ-CP','78/2021/TT-BTC','106/2016/QH13','13/2008/QH12','15/2022/NĐ-CP','209/2013/NĐ-CP','31/2013/QH13','156/2013/TT-BTC','65/2013/NĐ-CP','124/2008/NĐ-CP','132/2020/NĐ-CP','20/2017/NĐ-CP','20/2025/NĐ-CP','68/2020/NĐ-CP','114/2020/NĐ-CP','116/2020/QH14'})
+# EXPIRED_NUMBERS: 34 văn bản hết hiệu lực — khớp đúng bảng effectiveness đã
+# seed vào DB (document_effectiveness, run #23). Nguồn: 28 số theo bảng trạng
+# thái §4 của báo cáo quan hệ hiệu lực giai đoạn 2 (09/11/2026); 04/2007/QH12
+# bị 109/2025 thay thế từ 01/07/2026 (seed quan hệ, độ tin cậy "chắc chắn");
+# 954/2020/UBTVQH14 hết hiệu lực từ 01/01/2026 — xác minh ngay trong kho:
+# 110/2023 Điều 2 Khoản 2 ghi rõ 954/2020 hết hiệu lực; 100/2008/NĐ-CP,
+# 105/2003/TT-BTC, 123/2012/TT-BTC, 15/2006/QĐ-BTC theo CSV §5 (dữ liệu thứ
+# cấp, cùng nguồn với bảng effectiveness đã seed). GIỮ ĐỒNG BỘ với
+# document_effectiveness: đổi trạng thái trong DB thì cập nhật cả đây.
+EXPIRED_NUMBERS=frozenset({'195/2012/TT-BTC','200/2014/TT-BTC','48/2006/QĐ-BTC','53/2016/TT-BTC','75/2015/TT-BTC','119/2018/NĐ-CP','123/2020/NĐ-CP','32/2025/TT-BTC','38/2019/QH14','39/2014/TT-BTC','41/2022/NĐ-CP','51/2010/NĐ-CP','70/2025/NĐ-CP','78/2021/TT-BTC','106/2016/QH13','13/2008/QH12','15/2022/NĐ-CP','209/2013/NĐ-CP','31/2013/QH13','156/2013/TT-BTC','65/2013/NĐ-CP','124/2008/NĐ-CP','132/2020/NĐ-CP','20/2017/NĐ-CP','20/2025/NĐ-CP','68/2020/NĐ-CP','114/2020/NĐ-CP','116/2020/QH14','04/2007/QH12','954/2020/UBTVQH14','100/2008/NĐ-CP','105/2003/TT-BTC','123/2012/TT-BTC','15/2006/QĐ-BTC'})
 def _expired_in():
  # Chuỗi literal IN (...) dùng chung cho cả hai nhánh (số hiệu chỉ gồm
  # chữ/số, '/', '-', '.' nên an toàn khi nhúng trực tiếp).
@@ -130,6 +135,13 @@ def _retrieve(question,profile_cats=None,limit=12):
  # _is_past_question) để văn bản cũ không bị đẩy khỏi top-12.
  eff_pg=_eff_case_pg() if not _is_past_question(question) else '(0)'
  eff_lite=_eff_case_lite() if not _is_past_question(question) else '(0)'
+ # Câu hỏi "hiện tại" (không phải quá khứ/so sánh): loại hẳn văn bản đã
+ # hết hiệu lực khỏi kho truy xuất — trừ -3 (mềm) chưa đủ: 954/2020 vẫn
+ # lọt top vì khớp từ khóa mạnh, mô hình lấy số cũ làm đáp án dẫn đầu
+ # (Q34: 11tr/4,4tr thay vì 15,5tr/6,2tr). Fallback ở mỗi nhánh: nếu lọc
+ # xong còn <4 hàng thì chạy lại chỉ giữ lọc masthead (câu hỏi chỉ có căn
+ # cứ ở văn bản cũ vẫn có đáp án, kèm ngày hiệu lực để mô hình phân biệt).
+ exclude_expired=not _is_past_question(question)
  # Cụm 2 từ liên tiếp trong câu hỏi ('tiếp khách', 'thời điểm lập') là tín
  # hiệu mạnh nhất: cộng điểm lớn khi provision chứa nguyên cụm. Từ càng hiếm
  # (tần suất thấp trong toàn bộ provisions) càng có trọng số cao — 'thuế'
@@ -148,7 +160,7 @@ def _retrieve(question,profile_cats=None,limit=12):
   w=[1/((1+df/100)**0.5) for df in dfs[:len(kws)]]
   wb=[4/((1+df/10)**0.5) for df in dfs[len(kws):]]
   def _case(col,weight):return f'(CASE WHEN {col} ILIKE %s THEN {weight:.4f} ELSE 0 END)'
-  score='+'.join([_case('p.text',w[i]) for i in range(len(kws))]+[_case('p.text',wb[i]) for i in range(len(bigrams))]+['(CASE WHEN p.dieu IS NOT NULL THEN 2 ELSE 0 END)','(CASE WHEN length(p.text)<3000 THEN 1 WHEN length(p.text)>20000 THEN -8 ELSE 0 END)'])
+  score='+'.join([_case('p.text',w[i]) for i in range(len(kws))]+[_case('p.text',wb[i]) for i in range(len(bigrams))]+['(CASE WHEN p.dieu IS NOT NULL AND p.dieu>0 THEN 2 ELSE 0 END)','(CASE WHEN length(p.text)<3000 THEN 1 WHEN length(p.text)>20000 THEN -8 ELSE 0 END)'])
   title='+'.join([_case('d.title',w[i]) for i in range(len(kws)) if len(kws[i])>=4]) or '0'
   where=' OR '.join(['p.text ILIKE %s']*(len(kws)+len(bigrams)))
   cat_boost=', (CASE WHEN d.category = ANY(%s) THEN 1 ELSE 0 END) AS catb' if profile_cats else ', 0 AS catb'
@@ -156,7 +168,16 @@ def _retrieve(question,profile_cats=None,limit=12):
   # đó trên Postgres (lỗi 'column score does not exist' trên live) — bọc
   # truy vấn trong subquery để score/tscore/catb thành cột thật rồi mới sắp
   # xếp ở truy vấn ngoài. Tham số không đổi (chỉ có trong subquery).
-  sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT p.document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text,({score}) AS score,({title}) AS tscore{cat_boost},({eff_pg}) AS effb,p.ordinal AS ord FROM provisions p JOIN documents d ON d.id=p.document_id WHERE {where}) s ORDER BY score+tscore*2+catb+effb DESC, effective_date DESC NULLS LAST, ord ASC LIMIT 20'
+  # Lọc cứng ở truy vấn ngoài (số hiệu + ordinal đã là cột thật của subquery
+  # nên WHERE ngoài hợp lệ; không chạm WHERE trong vì nhóm OR từ khóa chưa
+  # đóng ngoặc — gắn AND vào đó sẽ sai thứ tự ưu tiên).
+  # (1) Câu hỏi "hiện tại": loại văn bản đã hết hiệu lực.
+  # (2) Luôn loại hàng masthead (dieu=0, ordinal=1 — tiêu đề/cơ quan ban
+  # hành, không phải điều khoản; VAS preamble dieu=0 có ordinal>=2 nên giữ).
+  outer_base="NOT (s.dieu=0 AND s.ord=1)"
+  outer_exp=f"s.number NOT IN {_expired_in()}" if exclude_expired else ''
+  outer_where=' WHERE '+(' AND '.join([c for c in (outer_exp,outer_base) if c]))
+  sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT p.document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text,({score}) AS score,({title}) AS tscore{cat_boost},({eff_pg}) AS effb,p.ordinal AS ord FROM provisions p JOIN documents d ON d.id=p.document_id WHERE {where}) s{outer_where} ORDER BY score+tscore*2+catb+effb DESC, effective_date DESC NULLS LAST, ord ASC LIMIT 20'
   # Thứ tự tham số PHẢI khớp thứ tự %s trong SQL: score, title, catb, rồi
   # mới đến WHERE. (Trước đây profile_cats đứng cuối nên placeholder
   # ANY(%s) của catb nhận nhầm pattern LIKE đầu tiên — boost theo hồ sơ
@@ -164,6 +185,11 @@ def _retrieve(question,profile_cats=None,limit=12):
   # WHERE ILIKE cuối nhận một list thay vì chuỗi.)
   params=[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+[_like_pat(k) for k in kws if len(k)>=4]+([profile_cats] if profile_cats else [])+[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]
   with pg() as c:rows=c.execute(sql,params).fetchall()
+  if exclude_expired and len(rows)<4:
+   # Kho hiện tại gần như không có căn cứ: chạy lại chỉ giữ lọc masthead
+   # (mô hình phân biệt cũ/mới bằng ngày hiệu lực trong ctx).
+   sql=sql.replace(outer_where,' WHERE '+outer_base,1)
+   with pg() as c:rows=c.execute(sql,params).fetchall()
   out=[]
   for r in rows:
    d=dict(r);d['text']=(d.get('text') or '')[:1200];d.pop('score',None);d.pop('tscore',None);d.pop('catb',None);out.append(d)
@@ -216,11 +242,16 @@ def _retrieve(question,profile_cats=None,limit=12):
  def _case2(col,pat,weight):
   p2='%'+pat[1:2].upper()+pat[2:]
   return f'(CASE WHEN {col} LIKE \'{pat}\' OR {col} LIKE \'{p2}\' THEN {weight:.4f} ELSE 0 END)'
- score='+'.join([_case2('p.noi_dung',_like_pat(k),w[i]) for i,k in enumerate(kws)]+[_case2('p.noi_dung',_like_pat(b),wb[i]) for i,b in enumerate(bigrams)]+['(CASE WHEN p.dieu IS NOT NULL THEN 2 ELSE 0 END)','(CASE WHEN length(p.noi_dung)<3000 THEN 1 WHEN length(p.noi_dung)>20000 THEN -8 ELSE 0 END)'])
+ score='+'.join([_case2('p.noi_dung',_like_pat(k),w[i]) for i,k in enumerate(kws)]+[_case2('p.noi_dung',_like_pat(b),wb[i]) for i,b in enumerate(bigrams)]+['(CASE WHEN p.dieu IS NOT NULL AND p.dieu>0 THEN 2 ELSE 0 END)','(CASE WHEN length(p.noi_dung)<3000 THEN 1 WHEN length(p.noi_dung)>20000 THEN -8 ELSE 0 END)'])
  title='+'.join([_case2('d.title',_like_pat(k),w[i]) for i,k in enumerate(kws) if len(k)>=4]) or '0'
  where=' OR '.join(['(p.noi_dung LIKE ? OR p.noi_dung LIKE ?)']*(len(kws)+len(bigrams)))
  cat_boost=', (CASE WHEN d.category IN (%s) THEN 1 ELSE 0 END) AS catb' % ','.join(['?']*len(profile_cats)) if profile_cats else ', 0 AS catb'
- sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text,({score}) AS score,({title}) AS tscore{cat_boost},({eff_lite}) AS effb,p.ordinal AS ord FROM provisions p JOIN documents d ON d.number=p.document_number WHERE {where}) s ORDER BY score+tscore*2+catb+effb DESC, effective_date DESC, ord ASC LIMIT 20'
+ # Như nhánh Postgres: lọc cứng ở truy vấn ngoài (hết hiệu lực với câu hỏi
+ # "hiện tại" + luôn loại hàng masthead dieu=0/ordinal=1).
+ outer_base="NOT (s.dieu=0 AND s.ord=1)"
+ outer_exp=f"s.number NOT IN {_expired_in()}" if exclude_expired else ''
+ outer_where=' WHERE '+(' AND '.join([c for c in (outer_exp,outer_base) if c]))
+ sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text,({score}) AS score,({title}) AS tscore{cat_boost},({eff_lite}) AS effb,p.ordinal AS ord FROM provisions p JOIN documents d ON d.number=p.document_number WHERE {where}) s{outer_where} ORDER BY score+tscore*2+catb+effb DESC, effective_date DESC, ord ASC LIMIT 20'
  pats2=[]
  for k in kws+bigrams:pats2+= [_like_pat(k),_like_pat('%'+k[:1].upper()+k[1:]+'%')]
  # Thứ tự tham số PHẢI khớp thứ tự ? trong SQL: catb (IN-list) đứng trước
@@ -229,6 +260,10 @@ def _retrieve(question,profile_cats=None,limit=12):
  # nhầm tên lĩnh vực thay vì từ khóa — boost theo hồ sơ không hoạt động.
  params=((profile_cats or [])+pats2)
  with conn() as c:rows=c.execute(sql,params).fetchall()
+ if exclude_expired and len(rows)<4:
+  # Kho hiện tại gần như không có căn cứ: chạy lại chỉ giữ lọc masthead.
+  sql=sql.replace(outer_where,' WHERE '+outer_base,1)
+  with conn() as c:rows=c.execute(sql,params).fetchall()
  out=[]
  for r in rows:
   d=dict(r);d['text']=(d.get('text') or '')[:1200];d.pop('score',None);d.pop('tscore',None);d.pop('catb',None);out.append(d)
@@ -274,6 +309,7 @@ def _ask_prompt(question,sources,profile):
   if bits:prof='\nNgười hỏi là kế toán của doanh nghiệp ('+', '.join(bits)+'). Trả lời theo đúng hoàn cảnh này khi đoạn văn bản cho phép phân biệt.'
  return ('Bạn là trợ lý kế toán – thuế Việt Nam. Chỉ trả lời dựa trên các đoạn văn bản pháp luật dưới đây. '
  'Mỗi ý trả lời phải kèm trích dẫn dạng [số hiệu văn bản, Điều X Khoản Y]. '
+ 'Viết trích dẫn đúng dạng \'Điều 9 Khoản 2\', KHÔNG viết dạng \'Điều 9.2\' hay \'Điều 9.1\'. '
  'Nếu các đoạn văn bản chỉ trả lời được một phần câu hỏi, hãy trả lời phần đó kèm trích dẫn và nêu rõ phần nào chưa có căn cứ. '
  'Chỉ nói \'không tìm thấy căn cứ trong kho văn bản\' khi không có đoạn nào liên quan đến câu hỏi. '
  'Không bịa số hiệu, ngày hiệu lực hay nội dung điều khoản. '
@@ -311,7 +347,7 @@ def ask(req:Ask):
  if cats and not isinstance(cats,list):cats=None
  sources,kws=_retrieve(q,cats)
  if not sources:
-  return {'status':'no_sources','answer':None,'sources':[],'keywords':kws,'message':'Không tìm thấy điều khoản liên quan trong kho 83 văn bản. Thử hỏi ngắn gọn hơn bằng từ khóa trong văn bản (ví dụ: thuế suất GTGT, thời điểm lập hóa đơn).'}
+  return {'status':'no_sources','answer':None,'sources':[],'keywords':kws,'message':'Không tìm thấy điều khoản liên quan trong kho 100 văn bản. Thử hỏi ngắn gọn hơn bằng từ khóa trong văn bản (ví dụ: thuế suất GTGT, thời điểm lập hóa đơn).'}
  prompt=_ask_prompt(q,sources,profile)
  # Chuỗi provider: Muse -> OpenAI -> Gemini. Provider nào có key nhưng lỗi
  # (key sai, hết quota, chặn theo quốc gia, timeout) thì thử tiếp provider
@@ -425,7 +461,8 @@ def upsert(d,text='',fetched=False):
 @app.get('/')
 def home():return FileResponse(ROOT/'app'/'static'/'index.html')
 @app.get('/api/documents')
-def docs(q:str='',category:str='',status:str='',source:str='',effective_from:str='',effective_to:str='',limit:int=Query(100,ge=1,le=500),offset:int=Query(0,ge=0)):
+def docs(q:str='',search:str='',category:str='',status:str='',source:str='',effective_from:str='',effective_to:str='',limit:int=Query(100,ge=1,le=500),offset:int=Query(0,ge=0)):
+ q=q or search  # ?search= là bí danh của ?q (UI dùng q; gọi ngoài hay dùng search).
  ef_from=_parse_date(effective_from,'effective_from');ef_to=_parse_date(effective_to,'effective_to')
  if USE_PG:
   conds=[];params=[]
