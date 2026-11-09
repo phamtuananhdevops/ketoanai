@@ -45,7 +45,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.3')
+app=FastAPI(title='KeToanAI',version='0.5.4')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -79,9 +79,56 @@ def _keywords(question):
  return seen[:8]
 def _like_pat(kw):
  return '%'+kw+'%'
+# --- v0.5.4: ưu tiên văn bản đang hiệu lực / mới nhất khi truy xuất ---
+# Smoke test bước 04 (09/11/2026): AI trả lời bằng văn bản cũ (119/2018 thay
+# vì 254/2026; 70/2025 thay vì 91/2026; biểu 7 bậc thay vì 5 bậc) vì điểm từ
+# khóa của văn bản cũ cao hơn mà không có thành phần ưu tiên hiệu lực.
+# Thành phần điểm hiệu lực (effb) cộng vào tổng điểm, cùng thang với điểm từ
+# khóa (một bigram hiếm ~4 điểm, một từ khóa ~0,1–1 điểm) nên chỉ là cú
+# hích, không phải bộ lọc cứng — câu hỏi so sánh cũ–mới vẫn lấy được văn
+# bản cũ khi từ khóa khớp mạnh. Số hiệu hết hiệu lực được nhúng trực tiếp
+# vào SQL dưới dạng literal (hằng số nội bộ từ báo cáo, không phải dữ liệu
+# người dùng) nên thứ tự tham số của truy vấn không đổi.
+# EXPIRED_NUMBERS: 28 văn bản hết hiệu lực theo bảng trạng thái §4 của báo
+# cáo quan hệ hiệu lực giai đoạn 2 (09/11/2026). 17 văn bản bổ sung sau
+# (VBPL-16 + 04/2007) không có trong bảng đó nên không bị trừ điểm — trạng
+# thái của chúng chưa được rà soát, không trừ điểm trên dữ liệu chưa xác minh.
+EXPIRED_NUMBERS=frozenset({'195/2012/TT-BTC','200/2014/TT-BTC','48/2006/QĐ-BTC','53/2016/TT-BTC','75/2015/TT-BTC','119/2018/NĐ-CP','123/2020/NĐ-CP','32/2025/TT-BTC','38/2019/QH14','39/2014/TT-BTC','41/2022/NĐ-CP','51/2010/NĐ-CP','70/2025/NĐ-CP','78/2021/TT-BTC','106/2016/QH13','13/2008/QH12','15/2022/NĐ-CP','209/2013/NĐ-CP','31/2013/QH13','156/2013/TT-BTC','65/2013/NĐ-CP','124/2008/NĐ-CP','132/2020/NĐ-CP','20/2017/NĐ-CP','20/2025/NĐ-CP','68/2020/NĐ-CP','114/2020/NĐ-CP','116/2020/QH14'})
+def _expired_in():
+ # Chuỗi literal IN (...) dùng chung cho cả hai nhánh (số hiệu chỉ gồm
+ # chữ/số, '/', '-', '.' nên an toàn khi nhúng trực tiếp).
+ return '('+','.join("'"+n+"'" for n in sorted(EXPIRED_NUMBERS))+')'
+def _eff_case_pg():
+ return ('(CASE WHEN d.number IN '+_expired_in()+' THEN -3 '
+  "WHEN d.effective_date IS NULL OR d.effective_date='1900-01-01' THEN 0 "
+  "WHEN d.effective_date > CURRENT_DATE THEN 1 "
+  "WHEN d.effective_date >= CURRENT_DATE - INTERVAL '2 years' THEN 3 "
+  "WHEN d.effective_date >= CURRENT_DATE - INTERVAL '5 years' THEN 1 "
+  'ELSE 0 END)')
+def _eff_case_lite():
+ return ('(CASE WHEN d.number IN '+_expired_in()+' THEN -3 '
+  "WHEN d.effective_date IS NULL OR d.effective_date='' OR d.effective_date='1900-01-01' THEN 0 "
+  "WHEN d.effective_date > date('now') THEN 1 "
+  "WHEN d.effective_date >= date('now','-2 years') THEN 3 "
+  "WHEN d.effective_date >= date('now','-5 years') THEN 1 "
+  'ELSE 0 END)')
+# Câu hỏi về quá khứ / so sánh cũ–mới cần cả văn bản cũ lẫn mới nên tắt
+# thành phần ưu tiên hiệu lực — xếp hạng thuần theo từ khóa như trước khi
+# có effb (kiểm tra hồi quy R1: tắt effb thì 04/2007 + 954/2020 lại lọt
+# top-12). Chỉ khớp cụm từ quá khứ rõ ràng ("trước ngày", "trước đây",
+# "cũ", "so sánh", "hết hiệu lực") — "trước 31/12" (hạn chót, câu hỏi
+# hiện tại) không khớp nên vẫn giữ ưu tiên hiệu lực.
+PAST_MARKERS=('trước ngày','trước khi','trước đây','trước đó','trước kia','cũ','so sánh','hết hiệu lực','quy định cũ','luật cũ','mức cũ')
+def _is_past_question(question):
+ q=(question or '').lower()
+ return any(m in q for m in PAST_MARKERS)
 def _retrieve(question,profile_cats=None,limit=12):
  kws=_keywords(question)
  if not kws:return [],[]
+ # Câu hỏi về quá khứ / so sánh thì tắt ưu tiên hiệu lực (xem
+ # _is_past_question) để văn bản cũ không bị đẩy khỏi top-12.
+ eff_pg=_eff_case_pg() if not _is_past_question(question) else '(0)'
+ eff_lite=_eff_case_lite() if not _is_past_question(question) else '(0)'
  # Cụm 2 từ liên tiếp trong câu hỏi ('tiếp khách', 'thời điểm lập') là tín
  # hiệu mạnh nhất: cộng điểm lớn khi provision chứa nguyên cụm. Từ càng hiếm
  # (tần suất thấp trong toàn bộ provisions) càng có trọng số cao — 'thuế'
@@ -108,8 +155,13 @@ def _retrieve(question,profile_cats=None,limit=12):
   # đó trên Postgres (lỗi 'column score does not exist' trên live) — bọc
   # truy vấn trong subquery để score/tscore/catb thành cột thật rồi mới sắp
   # xếp ở truy vấn ngoài. Tham số không đổi (chỉ có trong subquery).
-  sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT p.document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text,({score}) AS score,({title}) AS tscore{cat_boost},p.ordinal AS ord FROM provisions p JOIN documents d ON d.id=p.document_id WHERE {where}) s ORDER BY score+tscore*2+catb DESC, effective_date DESC NULLS LAST, ord ASC LIMIT 20'
-  params=[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+[_like_pat(k) for k in kws if len(k)>=4]+[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+([profile_cats] if profile_cats else [])
+  sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT p.document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text,({score}) AS score,({title}) AS tscore{cat_boost},({eff_pg}) AS effb,p.ordinal AS ord FROM provisions p JOIN documents d ON d.id=p.document_id WHERE {where}) s ORDER BY score+tscore*2+catb+effb DESC, effective_date DESC NULLS LAST, ord ASC LIMIT 20'
+  # Thứ tự tham số PHẢI khớp thứ tự %s trong SQL: score, title, catb, rồi
+  # mới đến WHERE. (Trước đây profile_cats đứng cuối nên placeholder
+  # ANY(%s) của catb nhận nhầm pattern LIKE đầu tiên — boost theo hồ sơ
+  # doanh nghiệp không bao giờ áp dụng; trên Postgres còn có thể 500 vì
+  # WHERE ILIKE cuối nhận một list thay vì chuỗi.)
+  params=[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]+[_like_pat(k) for k in kws if len(k)>=4]+([profile_cats] if profile_cats else [])+[_like_pat(k) for k in kws]+[_like_pat(b) for b in bigrams]
   with pg() as c:rows=c.execute(sql,params).fetchall()
   out=[]
   for r in rows:
@@ -120,7 +172,13 @@ def _retrieve(question,profile_cats=None,limit=12):
   # các trường hợp riêng ở Khoản 4, bị xếp sau (vd Điều 9 NĐ 254/2026 Khoản 1
   # xếp hạng 18 dù là quy tắc chung). Lấy thêm Khoản 1, 2 ngắn của tối đa
   # 3 Điều đứng đầu, đặt lên trước để AI có quy tắc chung.
-  seen={(d['number'],d.get('dieu'),d.get('khoan'),d.get('diem')) for d in out}
+  # v0.5.4: với Điều KHÔNG có Khoản (vd 110/2023 Điều 1: nội dung nằm
+  # thẳng ở điểm a/b) thì lấy hàng điểm thay cho Khoản — nếu không, phần
+  # mở rộng trả về rỗng và mô hình không thấy con số (15,5/6,2tr).
+  # Gộp: expansion lên trước, tối đa 4 hàng, rồi bỏ trùng (giữ vị trí đầu
+  # tiên) và cắt 12. Không bỏ qua hàng đã có trong top-12 khi lấy expansion
+  # (cách cũ): hàng đó có thể nằm cuối top-12 và bị cắt mất khi prepend —
+  # vd 110/2023 Điều 1 điểm a vừa là hàng expansion vừa đứng hạng 12.
   pairs=[]
   for d in out:
    k=(d['number'],d.get('dieu'))
@@ -128,11 +186,20 @@ def _retrieve(question,profile_cats=None,limit=12):
   extra=[]
   with pg() as c:
    for number,dieu in pairs[:3]:
-    for r in c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text FROM provisions p JOIN documents d ON d.id=p.document_id WHERE d.number=%s AND p.dieu=%s AND p.khoan IN (1,2) AND p.diem IS NULL AND length(p.text)<1500 ORDER BY p.khoan',(number,dieu)).fetchall():
-     dd=dict(r);key=(dd['number'],dd.get('dieu'),dd.get('khoan'),dd.get('diem'))
-     if key in seen:continue
-     seen.add(key);dd['text']=(dd.get('text') or '')[:1200];extra.append(dd)
-  out=extra+out
+    rows=c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text FROM provisions p JOIN documents d ON d.id=p.document_id WHERE d.number=%s AND p.dieu=%s AND p.khoan IN (1,2) AND p.diem IS NULL AND length(p.text)<1500 ORDER BY p.khoan',(number,dieu)).fetchall()
+    if not rows:
+     rows=c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.text FROM provisions p JOIN documents d ON d.id=p.document_id WHERE d.number=%s AND p.dieu=%s AND p.khoan IS NULL AND p.diem IS NOT NULL AND length(p.text)<1500 ORDER BY p.diem',(number,dieu)).fetchall()
+    for r in rows[:3]:
+     dd=dict(r);dd['text']=(dd.get('text') or '')[:1200];extra.append(dd)
+    if len(extra)>=4:break
+  extra=extra[:4]
+  merged=[]
+  seen2=set()
+  for d in extra+out:
+   key=(d['number'],d.get('dieu'),d.get('khoan'),d.get('diem'))
+   if key in seen2:continue
+   seen2.add(key);merged.append(d)
+  out=merged[:limit]
   return out[:limit],kws
  # SQLite fallback: LIKE chỉ không phân biệt hoa/thường với ASCII nên thử
  # thêm biến thể viết hoa chữ cái đầu (vd 'điều'/'Điều'); bảng provisions
@@ -152,17 +219,23 @@ def _retrieve(question,profile_cats=None,limit=12):
  title='+'.join([_case2('d.title',_like_pat(k),w[i]) for i,k in enumerate(kws) if len(k)>=4]) or '0'
  where=' OR '.join(['(p.noi_dung LIKE ? OR p.noi_dung LIKE ?)']*(len(kws)+len(bigrams)))
  cat_boost=', (CASE WHEN d.category IN (%s) THEN 1 ELSE 0 END) AS catb' % ','.join(['?']*len(profile_cats)) if profile_cats else ', 0 AS catb'
- sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text,({score}) AS score,({title}) AS tscore{cat_boost},p.ordinal AS ord FROM provisions p JOIN documents d ON d.number=p.document_number WHERE {where}) s ORDER BY score+tscore*2+catb DESC, effective_date DESC, ord ASC LIMIT 20'
+ sql=f'SELECT document_id,number,title,category,issued_date,effective_date,dieu,khoan,diem,text FROM (SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text,({score}) AS score,({title}) AS tscore{cat_boost},({eff_lite}) AS effb,p.ordinal AS ord FROM provisions p JOIN documents d ON d.number=p.document_number WHERE {where}) s ORDER BY score+tscore*2+catb+effb DESC, effective_date DESC, ord ASC LIMIT 20'
  pats2=[]
  for k in kws+bigrams:pats2+= [_like_pat(k),_like_pat('%'+k[:1].upper()+k[1:]+'%')]
- params=pats2+((profile_cats or []))
+ # Thứ tự tham số PHẢI khớp thứ tự ? trong SQL: catb (IN-list) đứng trước
+ # WHERE (score/title nhúng literal trực tiếp, không dùng ?). Trước đây
+ # profile_cats đứng cuối nên catb luôn = 0 và LIKE cuối của WHERE nhận
+ # nhầm tên lĩnh vực thay vì từ khóa — boost theo hồ sơ không hoạt động.
+ params=((profile_cats or [])+pats2)
  with conn() as c:rows=c.execute(sql,params).fetchall()
  out=[]
  for r in rows:
   d=dict(r);d['text']=(d.get('text') or '')[:1200];d.pop('score',None);d.pop('tscore',None);d.pop('catb',None);out.append(d)
  out=out[:limit]
- # Như nhánh Postgres: lấy thêm Khoản 1, 2 ngắn của tối đa 3 Điều đứng đầu.
- seen={(d['number'],d.get('dieu'),d.get('khoan'),d.get('diem')) for d in out}
+ # Như nhánh Postgres: lấy thêm Khoản 1, 2 ngắn của tối đa 3 Điều đứng đầu
+ # (với Điều không có Khoản thì lấy hàng điểm thay thế; tối đa 4 hàng
+ # expansion; gộp rồi bỏ trùng giữ vị trí đầu tiên — xem chú thích ở
+ # nhánh Postgres).
  pairs=[]
  for d in out:
   k=(d['number'],d.get('dieu'))
@@ -170,11 +243,20 @@ def _retrieve(question,profile_cats=None,limit=12):
  extra=[]
  with conn() as c:
   for number,dieu in pairs[:3]:
-   for r in c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text FROM provisions p JOIN documents d ON d.number=p.document_number WHERE d.number=? AND p.dieu=? AND p.khoan IN (1,2) AND p.diem IS NULL AND length(p.noi_dung)<1500 ORDER BY p.khoan',(number,dieu)).fetchall():
-    dd=dict(r);key=(dd['number'],dd.get('dieu'),dd.get('khoan'),dd.get('diem'))
-    if key in seen:continue
-    seen.add(key);dd['text']=(dd.get('text') or '')[:1200];extra.append(dd)
- out=extra+out
+   rows=c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text FROM provisions p JOIN documents d ON d.number=p.document_number WHERE d.number=? AND p.dieu=? AND p.khoan IN (1,2) AND p.diem IS NULL AND length(p.noi_dung)<1500 ORDER BY p.khoan',(number,dieu)).fetchall()
+   if not rows:
+    rows=c.execute('SELECT d.id AS document_id,d.number,d.title,d.category,d.issued_date,d.effective_date,p.dieu,p.khoan,p.diem,p.noi_dung AS text FROM provisions p JOIN documents d ON d.number=p.document_number WHERE d.number=? AND p.dieu=? AND p.khoan IS NULL AND p.diem IS NOT NULL AND length(p.noi_dung)<1500 ORDER BY p.diem',(number,dieu)).fetchall()
+   for r in rows[:3]:
+    dd=dict(r);dd['text']=(dd.get('text') or '')[:1200];extra.append(dd)
+   if len(extra)>=4:break
+ extra=extra[:4]
+ merged=[]
+ seen2=set()
+ for d in extra+out:
+  key=(d['number'],d.get('dieu'),d.get('khoan'),d.get('diem'))
+  if key in seen2:continue
+  seen2.add(key);merged.append(d)
+ out=merged[:limit]
  return out[:limit],kws
 def _ask_prompt(question,sources,profile):
  ctx=[]
