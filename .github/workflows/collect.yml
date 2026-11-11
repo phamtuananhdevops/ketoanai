@@ -189,11 +189,15 @@ jobs:
         # 26/2012, 100/2008) are ingested from VBPL's rendered HTML into
         # the same scratch DB. Without this step a cold run would only
         # reach 83/100 documents. The script exits non-zero unless all 16
-        # ingest.
+        # ingest. Live GET first; if VBPL blocks the fetch (HTTP 403 for
+        # automated clients since 11/11/2026 — runs #26/#27 failed here),
+        # each document falls back to its saved HTML in
+        # collector/vbpl-html/ (see that folder's README.md).
         run: |
           set -euo pipefail
           SCRATCH_DB="$RUNNER_TEMP/documents.db"
-          python collector/vbpl_html_ingest.py --db "$SCRATCH_DB"
+          python collector/vbpl_html_ingest.py --db "$SCRATCH_DB" \
+            --html-fallback-dir collector/vbpl-html
 
       - name: Ingest local VBPL PDFs
         # The 5 documents with neither a Công báo detail page nor full
