@@ -160,6 +160,18 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def vbpl_fallback_path(fallback_dir, number: str):
+    """Saved VBPL detail page for a document, e.g. 149/2001/QĐ-BTC
+    -> <fallback_dir>/149-2001.html. None when no fallback dir is given
+    or the number has no <first>-<second> form."""
+    if not fallback_dir:
+        return None
+    parts = number.split("/")
+    if len(parts) < 2:
+        return None
+    return Path(fallback_dir) / f"{parts[0]}-{parts[1]}.html"
+
+
 def check_policy(url: str) -> str:
     """Refuse any URL outside the allowlist / VBPL robots rules, pre-fetch."""
     parsed = urlparse(url)
@@ -358,6 +370,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="only this document number, e.g. 88/2015/QH13")
     ap.add_argument("--force", action="store_true",
                     help="re-download even when the manifest hash matches")
+    ap.add_argument("--html-fallback-dir", default=None,
+                    help="Directory with saved VBPL detail pages "
+                         "(files <first>-<second>.html, e.g. 149-2001.html); "
+                         "used ONLY when the live GET of a VBPL original "
+                         "fails (VBPL blocks automated fetches since 11/11/2026)")
     args = ap.parse_args(argv)
 
     if not args.db.exists():
@@ -430,24 +447,36 @@ def main(argv: list[str] | None = None) -> int:
                         sha, size = prev_manifest[rel], local.stat().st_size
                         print(f"[skip] {number} (hash matches manifest)", flush=True)
                     else:
+                        data = None
+                        err = ""
                         try:
                             data = fetcher.get_bytes(source_url)
-                            local.write_bytes(data)
-                            sha = hashlib.sha256(data).hexdigest()
-                            size = len(data)
                         except Exception as exc:
+                            err = f"{type(exc).__name__}: {exc}"
+                            fb = vbpl_fallback_path(
+                                args.html_fallback_dir, number)
+                            if fb is not None and fb.exists():
+                                print(f"[fallback] {number}: live GET failed "
+                                      f"({err}); using saved HTML", flush=True)
+                                data = fb.read_bytes()
+                                note += (" | via saved HTML fallback "
+                                         "(live GET failed)")
+                        if data is None:
                             sha, size = "", 0
                             doc_ok = False
                             row = {"number": number, "source": source,
                                    "source_url": source_url, "pdf_url": "",
                                    "local_path": rel, "file_sha256": "",
                                    "bytes": 0, "status": "failed",
-                                   "error": f"{type(exc).__name__}: {exc}",
+                                   "error": err,
                                    "note": note}
                             writer.writerow(row); f.flush(); rows.append(row)
-                            print(f"[FAIL] {number}: {row['error']}", flush=True)
+                            print(f"[FAIL] {number}: {err}", flush=True)
                             n_failed_docs += 1
                             continue
+                        local.write_bytes(data)
+                        sha = hashlib.sha256(data).hexdigest()
+                        size = len(data)
                     row = {"number": number, "source": source,
                            "source_url": source_url, "pdf_url": "",
                            "local_path": rel, "file_sha256": sha,
