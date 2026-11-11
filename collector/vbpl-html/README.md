@@ -1,16 +1,19 @@
 # VBPL HTML — saved copies (fallback only)
 
-16 saved VBPL detail pages (`<key>.html`), fetched 09/11/2026 during the
-VBPL-16 round (browser download / curl from the VM, while VBPL still served
-automated clients). One file per document in `vbpl_html_ingest.py`'s
-`TARGETS` list.
+20 saved VBPL detail pages (`<key>.html`):
+- 16 files for the documents in `vbpl_html_ingest.py`'s `TARGETS` list
+  (fetched 09/11/2026 during the VBPL-16 round).
+- 4 more for the other VBPL-sourced documents (234/2003, 12/2005,
+  100/2005, 15/2006 — fetched 11/11/2026). These four are ingested from
+  local PDFs, but `save_originals.py` still fetches their VBPL detail
+  page as the "original", so they need a fallback copy too.
 
-**These files are a fallback, not the source of truth.** The workflow runs
-`vbpl_html_ingest.py` with `--html-fallback-dir collector/vbpl-html`: it
-tries the live VBPL page first and uses the saved copy for that document
-only when the live GET fails. VBPL has blocked automated fetches (HTTP 403)
+**These files are a fallback, not the source of truth.** Both scripts try
+the live VBPL page first and use the saved copy for that document only
+when the live GET fails. VBPL has blocked automated fetches (HTTP 403)
 from some networks since 11/11/2026 — runs #26 and #27 both failed at the
-VBPL HTML step for that reason; the fallback unblocks them.
+VBPL HTML ingest step for that reason, and run #28 failed at the
+save-originals step; the fallback unblocks them.
 
 **Do not edit these files.** They are verbatim saved pages (Next.js RSC
 payloads). If a document's VBPL page genuinely changes, re-fetch the live
