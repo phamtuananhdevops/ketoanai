@@ -139,9 +139,10 @@ async function load(){
 }
 let curProvs=[],provShown=0;
 function provLabel(p){
- if(p.dieu>0)return 'Điều '+p.dieu+(p.khoan?(' Khoản '+p.khoan):'')+(p.diem?(' Điểm '+p.diem):'');
- if(p.khoan!=null)return 'Đoạn '+p.khoan;
- return p.ordinal===1?'Mở đầu':'Đoạn '+p.ordinal;
+ const m=p.muc?p.muc+' — ':'';
+ if(p.dieu>0)return m+'Điều '+p.dieu+(p.khoan?(' Khoản '+p.khoan):'')+(p.diem?(' Điểm '+p.diem):'');
+ if(p.khoan!=null)return m+'Đoạn '+p.khoan;
+ return m+(p.ordinal===1?'Mở đầu':'Đoạn '+p.ordinal);
 }
 function hi(text,q){
  const t=esc(text);
@@ -277,7 +278,7 @@ async function askAI(){
   if(d.status==='no_sources'){out.textContent=d.message;return}
   if(d.status==='ok'){out.textContent='Trả lời từ kho văn bản'+(d.model?' · mô hình '+d.model:'')+'. Đối chiếu văn bản gốc trước khi áp dụng.';ans.innerHTML='<div class="panel" style="background:#f7fafc;margin-top:0"><p style="white-space:pre-wrap;margin:0">'+esc(d.answer)+'</p></div>'}
   else{out.textContent=d.message||'Trợ lý AI chưa trả lời được — dưới đây là các đoạn văn bản liên quan.'}
-  src.innerHTML='<h3>Căn cứ trong văn bản</h3>'+d.sources.map(s=>`<div class="doc"><a onclick="openDetail(${s.document_id})">${esc(s.number)} — Điều ${s.dieu??'?' }${s.khoan?'.'+s.khoan:''}${s.diem?') '+s.diem:''}</a><div class="meta">${esc(s.category)} · Hiệu lực: ${fmt(s.effective_date)}</div><p style="font-size:14px;white-space:pre-wrap">${esc(s.text)}</p></div>`).join('');
+  src.innerHTML='<h3>Căn cứ trong văn bản</h3>'+d.sources.map(s=>`<div class="doc"><a onclick="openDetail(${s.document_id})">${esc(s.number)} — ${s.muc?esc(s.muc)+', ':''}Điều ${s.dieu??'?' }${s.khoan?'.'+s.khoan:''}${s.diem?') '+s.diem:''}</a><div class="meta">${esc(s.category)} · Hiệu lực: ${fmt(s.effective_date)}</div><p style="font-size:14px;white-space:pre-wrap">${esc(s.text)}</p></div>`).join('');
  }catch(e){out.textContent='Không hỏi được: '+e.message}
 }
 document.getElementById('ask').addEventListener('keydown',e=>{if(e.key==='Enter')askAI()});
