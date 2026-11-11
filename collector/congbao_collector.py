@@ -57,6 +57,7 @@ import re
 import sqlite3
 import sys
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -745,7 +746,83 @@ def parse_provisions(text: str, document_number: str) -> list[dict]:
             # one row, so normal docs are unaffected.
             provisions[:0] = _split_dieu_body(
                 document_number, None, None, 0, "", pre)
+    if document_number == "149/2001/QĐ-BTC":
+        _label_vas_149_2001(provisions)
     return provisions
+
+
+# --- Nhãn chuẩn mực cho 149/2001 (triage Q24/Q38/Q45, 11/11/2026) --------
+# Toàn bộ 4 chuẩn mực (VAS 02/03/04/14, 226 hàng) nằm trong thân Điều 4,
+# đánh số đoạn lại từ 1 ở mỗi chuẩn nên (Điều 4, Khoản 13) trùng nhau
+# giữa VAS 03 và VAS 14. Hàm này gắn nhãn mục + chèn tên chuẩn vào đầu
+# mỗi hàng (phương án A+C; KHÔNG đổi schema):
+#  - muc = "Chuẩn mực số 02/03/04/14" (UI + trích dẫn AI hiển thị được).
+#  - noi_dung được tiền tố "Chuẩn mực số 14 — Doanh thu và thu nhập
+#    khác. " để tên chuẩn thành tìm được khi truy xuất.
+# Ranh giới các chuẩn được nhận diện từ khối tiêu đề trong nội dung hàng:
+# hàng chứa khối tiêu đề của chuẩn N thuộc về chuẩn TRƯỚC (nội dung chính
+# của nó là đoạn cuối của chuẩn trước); chuẩn N bắt đầu từ hàng sau.
+# Ngoại lệ: hàng đầu tiên (ord 9) chứa khối tiêu đề VAS 02 và cũng là
+# hàng đầu tiên của chuẩn đó nên thuộc về VAS 02.
+# Lưu ý: "Chuẩn mục số 4" (thiếu dấu) là lỗi chính tả trong văn bản gốc,
+# regex chấp nhận cả hai dạng. Chỉ áp dụng cho 149/2001 — các văn bản VAS
+# khác (165/2002, 234/2003, ...) cần bảng ranh giới riêng.
+_VAS_149_TITLES = {2: "Hàng tồn kho", 3: "Tài sản cố định hữu hình",
+                   4: "Tài sản cố định vô hình",
+                   14: "Doanh thu và thu nhập khác"}
+_VAS_149_TITLE_TO_NUM = {"HÀNG TỒN KHO": 2,
+                         "TÀI SẢN CỐ ĐỊNH HỮU HÌNH": 3,
+                         "TÀI SẢN CỐ ĐỊNH VÔ HÌNH": 4,
+                         "DOANH THU VÀ THU NHẬP KHÁC": 14}
+_VAS_149_HEADER_RE = re.compile(r"Chuẩn m[ựụ]c số(?:\s*\n?\s*0?(\d+))?")
+def _vas_149_fold(s):
+    # So sánh không dấu: nguồn có lỗi dấu (vd tiêu đề VAS 02 viết
+    # "HÀNG TỔN KHO" thay vì "HÀNG TỒN KHO") nên so khớp theo chữ cái
+    # gốc, bỏ mọi dấu thanh/dấu mũ.
+    return "".join(ch for ch in unicodedata.normalize("NFKD", s)
+                   if not unicodedata.combining(ch))
+def _vas_149_header_num(t):
+    # Số chuẩn của khối tiêu đề trong nội dung hàng, hoặc None.
+    # Khối tiêu đề thật luôn kèm dòng "(ban hành và công bố..." ngay sau
+    # đó; câu nhắc chéo tới chuẩn khác trong đoạn văn không có dòng này
+    # nên bị loại. Số chuẩn có thể vắng mặt: parser bỏ dòng chỉ có số
+    # ("2" ở tiêu đề VAS 02) nên suy ra từ tiêu đề in hoa.
+    m = _VAS_149_HEADER_RE.search(t)
+    if not m:
+        return None
+    tail = t[m.end():m.end() + 300]
+    if "(ban hành" not in tail:
+        return None
+    if m.group(1):
+        n = int(m.group(1))
+        return n if n in _VAS_149_TITLES else None
+    folded = _vas_149_fold(tail)
+    for title, n in _VAS_149_TITLE_TO_NUM.items():
+        if _vas_149_fold(title) in folded:
+            return n
+    return None
+def _label_vas_149_2001(provisions):
+    cur = None
+    for p in provisions:
+        if p.get("dieu") != 4:
+            continue
+        t = p.get("noi_dung") or ""
+        nxt = _vas_149_header_num(t)
+        if nxt is not None and cur is not None:
+            _vas_149_apply(p, cur)
+            cur = nxt
+            continue
+        if nxt is not None:
+            cur = nxt
+        if cur is not None:
+            _vas_149_apply(p, cur)
+def _vas_149_apply(p, n):
+    label = f"Chuẩn mực số {n:02d}"
+    p["muc"] = label
+    prefix = f"{label} — {_VAS_149_TITLES[n]}. "
+    t = p.get("noi_dung") or ""
+    if not t.startswith(prefix):
+        p["noi_dung"] = prefix + t
 
 
 def _split_dieu_body(number: str, chuong, muc, dieu: int, title: str,
