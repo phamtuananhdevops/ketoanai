@@ -19,6 +19,12 @@ Usage:
       # use previously fetched page HTML instead of live GET (same content,
       # avoids re-hitting VBPL when it is throttling; fetch provenance is
       # still recorded in fetch_log)
+  python vbpl_html_ingest.py --db documents.db \
+      --html-fallback-dir collector/vbpl-html
+      # live GET first; if VBPL blocks the fetch (HTTP 403 for automated
+      # clients since 11/11/2026), fall back per-document to the saved HTML
+      # committed in collector/vbpl-html/ (same pages, fetched 09/11/2026;
+      # these 16 old laws do not change). Provenance notes the fallback.
 """
 from __future__ import annotations
 
@@ -194,6 +200,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--html-dir", default=None,
                     help="Directory with previously fetched page HTML "
                          "(files <key>.html); skips live GET")
+    ap.add_argument("--html-fallback-dir", default=None,
+                    help="Directory with previously fetched page HTML "
+                         "(files <key>.html); used ONLY when the live GET "
+                         "fails for a document (VBPL blocks automated "
+                         "fetches from some networks since 11/11/2026)")
     args = ap.parse_args(argv)
 
     meta_all = load_metadata()
@@ -211,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
             # through the egress proxy hangs on the 2nd+ VBPL page (read
             # timeouts), while fresh connections succeed (verified with curl).
             collector = Collector(Path(args.db))
+            via_fallback = False
             try:
                 if args.html_dir:
                     html = (Path(args.html_dir) / f"{t['key']}.html").read_text(
@@ -220,10 +232,26 @@ def main(argv: list[str] | None = None) -> int:
                     resp = collector.get(t["url"])
                     text = extract_vbpl_html_text(resp.text)
             except Exception as exc:  # noqa: BLE001 - per-doc failure, keep going
-                print(f"[{number}] FAILED: {exc}")
-                log_fetch(conn, number, t["url"], None, 0, 0, "failed", str(exc))
-                results.append((number, "failed", str(exc), 0, 0, {}))
-                continue
+                if args.html_fallback_dir:
+                    fb = Path(args.html_fallback_dir) / f"{t['key']}.html"
+                    try:
+                        html = fb.read_text(encoding="utf-8", errors="replace")
+                        text = extract_vbpl_html_text(html)
+                        via_fallback = True
+                        print(f"[{number}] live GET failed ({exc}); "
+                              f"using saved HTML fallback")
+                    except Exception as fb_exc:  # noqa: BLE001
+                        print(f"[{number}] FAILED: {exc} "
+                              f"(fallback also failed: {fb_exc})")
+                        log_fetch(conn, number, t["url"], None, 0, 0,
+                                  "failed", f"{exc} | fallback: {fb_exc}")
+                        results.append((number, "failed", str(exc), 0, 0, {}))
+                        continue
+                else:
+                    print(f"[{number}] FAILED: {exc}")
+                    log_fetch(conn, number, t["url"], None, 0, 0, "failed", str(exc))
+                    results.append((number, "failed", str(exc), 0, 0, {}))
+                    continue
             finally:
                 collector.close()
             checks = verify(number, row["ten_van_ban"], text, t["expected_dieus"])
@@ -251,8 +279,11 @@ def main(argv: list[str] | None = None) -> int:
                 # old provisions on the 'updated' path, so a fresh store is safe.
                 n_prov = store_provisions(conn, provisions)
             note = PROVENANCE + (f" | {t['note']}" if t.get("note") else "")
+            if via_fallback:
+                note += " | via saved HTML fallback (live GET failed)"
+            fb_mark = " (fallback)" if via_fallback else ""
             log_fetch(conn, number, t["url"], None, 0, len(text), "ok", note)
-            print(f"[{number}] OK ({action}): {len(text)} chars, "
+            print(f"[{number}] OK ({action}){fb_mark}: {len(text)} chars, "
                   f"{n_prov} provisions, {len(dieus)} Dieu "
                   f"({min(dieus) if dieus else '-'}-{max(dieus) if dieus else '-'}), "
                   f"checks={checks}")
