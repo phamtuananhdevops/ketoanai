@@ -253,10 +253,15 @@ jobs:
         # into collector/originals/ + collector/manifest.csv. Idempotent via
         # manifest sha256, but the runner is fresh each week so this normally
         # re-downloads the corpus (~134 MB). 1 req/s politeness applies.
+        # VBPL originals fall back to the saved pages in
+        # collector/vbpl-html/ when the live GET is blocked (HTTP 403 for
+        # automated clients since 11/11/2026 — run #28 failed 20/20 VBPL
+        # docs here).
         run: |
           set -euo pipefail
           SCRATCH_DB="$RUNNER_TEMP/documents.db"
-          python collector/save_originals.py --db "$SCRATCH_DB" --out collector/originals
+          python collector/save_originals.py --db "$SCRATCH_DB" --out collector/originals \
+            --html-fallback-dir collector/vbpl-html
 
       - name: Check for saved original PDFs
         # Gate for the upload step below: runs only when the save step above
