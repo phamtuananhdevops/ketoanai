@@ -483,7 +483,7 @@ def ask(req:Ask):
   if not key:continue
   try:
    answer,model=fn(prompt)
- check=_call_decisions(answer,sources)
+   check=_call_decisions(answer,sources)
    return {'status':'ok','answer':answer,'sources':sources,'keywords':kws,'model':model,'check':check}
   except Exception as e:last_err=e
  if last_err is not None:
