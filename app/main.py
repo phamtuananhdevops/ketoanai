@@ -46,7 +46,7 @@ def _source_from_url(url):
  for name,hosts in SOURCE_HOSTS.items():
   if host in hosts:return name
  return 'congbao' if 'congbao' in host else 'vbpl' if 'vbpl' in host else 'mof' if 'mof.gov.vn' in host else 'gdt' if 'gdt.gov.vn' in host else 'luatvietnam' if 'luatvietnam.vn' in host else 'unknown'
-app=FastAPI(title='KeToanAI',version='0.5.9')
+app=FastAPI(title='KeToanAI',version='0.6.0')
 # --- v0.5.0: AI hỏi đáp có trích dẫn (RAG-lite) + hồ sơ doanh nghiệp ---
 # Truy xuất = khớp từ khóa trên bảng provisions (chưa có vector DB — giống
 # RAG-lite của các site CPA). AI chỉ được trả lời từ đoạn văn bản truy xuất
@@ -403,6 +403,64 @@ def _call_gemini(prompt):
   r=client.post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',headers={'x-goog-api-key':GEMINI_API_KEY,'Content-Type':'application/json'},json={'contents':[{'parts':[{'text':prompt}]}],'generationConfig':{'temperature':0,'maxOutputTokens':800}})
   r.raise_for_status()
   return r.json()['candidates'][0]['content']['parts'][0]['text'].strip(),'gemini-2.0-flash'
+# --- v0.6.0: lớp kiểm tra live bằng Gemini Decisions API (19/11/2026) ---
+# Sau khi provider trả đáp án, hỏi Decisions 3 câu yes/no trên cùng input
+# (đáp án + các đoạn văn bản đã truy xuất). Câu nào trả lời NO với độ tin
+# cậy >= 0.7 thì gắn cờ CẢNH BÁO — vẫn hiện đáp án, không chặn, không tự sửa.
+# Fail-open: Decisions lỗi/timeout/không có key -> bỏ qua kiểm tra, đáp án
+# trả về như cũ. Dùng chung GEMINI_API_KEY đã có trên Vercel (Decisions chạy
+# cùng host generativelanguage.googleapis.com, header x-goog-api-key).
+# Pilot 18-19/11: hóa đơn 5/5 đúng (tin cậy 0.90-0.97); Q24/Q34/Q43/T03 4/4
+# NO đúng kỳ vọng (tin cậy 0.78-0.98). Xem thiết kế đầy đủ:
+# files/kiem-toan-noi-dung/thiet-ke-lop-kiem-tra-decisions.md
+DECISIONS_URL='https://generativelanguage.googleapis.com/v1beta/decisions'
+DECISIONS_MODEL='gemini-decision-1'
+DECISIONS_FLAG_MIN_CONF=0.7
+DECISIONS_CHECKS={
+ 'stale_citation':('Câu trả lời có trích dẫn đúng các văn bản đang hiệu lực (không trích văn bản đã hết hiệu lực như quy định hiện hành) không?',
+  'Có thể trích văn bản đã hết hiệu lực'),
+ 'figures_match':('Số liệu và ngày hiệu lực trong câu trả lời có khớp với các đoạn văn bản được trích dẫn không?',
+  'Số liệu / ngày hiệu lực có thể không khớp văn bản trích dẫn'),
+ 'current_figures':('Câu trả lời có nêu đúng số liệu hiện hành (không nêu số liệu cũ đã hết hiệu lực như số liệu hiện tại) không?',
+  'Có thể nêu số liệu cũ như số liệu hiện tại'),
+}
+def _decisions_input(answer,sources):
+ ctx=[]
+ for i,s in enumerate(sources,1):
+  _ref=f"Điều {s.get('dieu') or ''}"
+  if s.get('khoan'): _ref+=f" Khoản {s['khoan']}"
+  if s.get('diem'): _ref+=f" Điểm {s['diem']}"
+  if s.get('muc'): _ref=s['muc']+', '+_ref
+  ref=f"[{i}] {s.get('number')} — {_ref} (hiệu lực từ {s.get('effective_date') or 'chưa xác minh'})"
+  ctx.append(ref+'\n'+(s.get('text') or '')[:800])
+ return 'CÂU TRẢ LỜI CỦA TRỢ LÝ AI:\n'+(answer or '')+'\n\nĐOẠN VĂN BẢN ĐƯỢC TRÍCH DẪN:\n'+'\n\n'.join(ctx)
+def _call_decisions(answer,sources):
+ # Trả về {'status': 'ok'|'flagged'|'skipped', 'flags': [...], 'questions': {...}}.
+ # 'noul' trong đáp án Decisions = P(YES). Câu hỏi dạng "đáp án có đúng
+ # không?" nên YES = tốt, NO = gắn cờ; confidence của NO = 1 - noul.
+ if not GEMINI_API_KEY or not answer:
+  return {'status':'skipped','reason':'no_key','flags':[],'questions':{}}
+ qs={k:{'type':'noul','instructions':v[0]} for k,v in DECISIONS_CHECKS.items()}
+ try:
+  with httpx.Client(timeout=10,trust_env=False) as client:
+   r=client.post(DECISIONS_URL,headers={'x-goog-api-key':GEMINI_API_KEY,'Content-Type':'application/json'},json={'model':DECISIONS_MODEL,'input':[{'type':'text','text':_decisions_input(answer,sources)}],'questions':qs})
+   r.raise_for_status()
+   data=r.json()
+ except Exception as e:
+  return {'status':'skipped','reason':'decisions_error','error':str(e)[:200],'flags':[],'questions':{}}
+ answers=(data.get('answers') or {})
+ out_q={}; flags=[]
+ for k,(instr,label) in DECISIONS_CHECKS.items():
+  a=answers.get(k) or {}
+  noul=a.get('noul')
+  if noul is None:
+   out_q[k]={'answer':None,'confidence':None}; continue
+  is_yes=noul>=0.5
+  conf=noul if is_yes else 1-noul
+  out_q[k]={'answer':'yes' if is_yes else 'no','confidence':round(conf,4)}
+  if (not is_yes) and conf>=DECISIONS_FLAG_MIN_CONF:
+   flags.append({'id':k,'label':label,'confidence':round(conf,4)})
+ return {'status':'flagged' if flags else 'ok','flags':flags,'questions':out_q}
 class Ask(BaseModel):
  question:str;profile:dict|None=None
 @app.post('/api/ask')
@@ -425,7 +483,8 @@ def ask(req:Ask):
   if not key:continue
   try:
    answer,model=fn(prompt)
-   return {'status':'ok','answer':answer,'sources':sources,'keywords':kws,'model':model}
+ check=_call_decisions(answer,sources)
+   return {'status':'ok','answer':answer,'sources':sources,'keywords':kws,'model':model,'check':check}
   except Exception as e:last_err=e
  if last_err is not None:
   # AI lỗi (key sai, hết quota, timeout) -> vẫn trả đoạn văn bản, không 500.
